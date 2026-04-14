@@ -25,7 +25,7 @@ Access at http://localhost:3000
 ## Features
 
 - Multi-snippet input with source attribution
-- AI article generation (Coze LLM)
+- AI article generation (Volc Engine ARK LLM)
 - Web search supplements
 - **Internal content verification** (auto-retry on failure)
 - **Sensitive words filtering** (viewable list)

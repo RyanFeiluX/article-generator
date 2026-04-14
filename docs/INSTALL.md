@@ -5,7 +5,7 @@ A full-stack application for generating AI-powered articles from text snippets w
 ## Features
 
 - **Multi-snippet Input**: Receive multiple text snippets from users with optional source attribution
-- **AI Article Generation**: Generate comprehensive articles using Coze's built-in LLM
+- **AI Article Generation**: Generate comprehensive articles using Volc Engine ARK LLM
 - **Web Search Supplement**: Automatically supplement content with online search results
 - **Internal Content Verification** (Invisible to Frontend):
   - Size validation (500-30,000 characters)
@@ -215,8 +215,10 @@ MAX_RETRY_ATTEMPTS = 3      # Auto-retry attempts
 Change the model in `backend/main.py`:
 
 ```python
-llm_client = LLMClient(ctx=llm_ctx)
-# The default model is configured in the SDK
+# Volc Engine ARK API Configuration
+ARK_API_KEY = os.getenv("ARK_API_KEY", "")
+ARK_BASE_URL = os.getenv("ARK_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3")
+ARK_MODEL = os.getenv("ARK_MODEL", "ep-20260413174919-nqclc")
 ```
 
 ## Troubleshooting
@@ -243,9 +245,13 @@ app.add_middleware(
 
 ### LLM Connection Issues
 
-Ensure the Coze SDK is properly installed:
+Ensure the Volc Engine ARK API key is properly configured:
 ```bash
-pip install coze-coding-dev-sdk coze-coding-utils
+# Set environment variables
+ARK_API_KEY=your_api_key_here
+ARK_MODEL=your_model_id_here
+
+# Or add to your .env file
 ```
 
 ## Development

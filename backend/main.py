@@ -2,7 +2,7 @@
 FastAPI Backend for Article Generation Application
 Features:
 - Receive multiple text snippets from users
-- Generate articles using Coze LLM (direct API)
+- Generate articles using Volc Engine ARK LLM (direct API)
 - Supplement with online search results
 - Internal content verification (invisible to frontend)
 - Auto-retry on verification failure
@@ -189,10 +189,12 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         content={"detail": exc.detail}
     )
 
-# Coze API configuration (uses environment variables)
 # Volc Engine ARK API Configuration
 ARK_API_KEY = os.getenv("ARK_API_KEY", "")
 ARK_BASE_URL = os.getenv("ARK_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3")
+# Ensure ARK_BASE_URL has a valid protocol
+if not ARK_BASE_URL.startswith(('http://', 'https://')):
+    ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
 ARK_MODEL = os.getenv("ARK_MODEL", "ep-20260413174919-nqclc")
 
 # Constants for content verification
