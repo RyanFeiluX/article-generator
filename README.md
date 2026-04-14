@@ -1,0 +1,39 @@
+# Article Generator
+
+AI-powered article generation from text snippets with content verification.
+
+## Quick Start
+
+### Backend (FastAPI)
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # or venv\Scripts\activate on Windows
+pip install -r requirements.txt
+python main.py
+```
+
+### Frontend (React + Vite)
+```bash
+cd frontend
+pnpm install
+pnpm dev
+```
+
+Access at http://localhost:3000
+
+## Features
+
+- Multi-snippet input with source attribution
+- AI article generation (Coze LLM)
+- Web search supplements
+- **Internal content verification** (auto-retry on failure)
+- **Sensitive words filtering** (viewable list)
+- **Data persistence** (localStorage)
+- Real-time streaming (SSE)
+- Export (TXT, MD, HTML) & Copy
+- **Single-click "Clear All"**
+
+## Documentation
+
+See [docs/INSTALL.md](docs/INSTALL.md) for detailed installation guide.
