@@ -99,32 +99,57 @@ timeout /t 2 /nobreak >nul
 REM Step 6: Final verification and container launch
 echo [6/7] Final verification and container launch...
 
-REM Double-check container doesn't exist
-for /f "tokens=*" %%i in ('docker ps -a --filter "name=article-generator" --format "{{.Names}}" 2^>^&1') do (
-    if "%%i"=="article-generator" (
-        echo     - Container still exists, removing...
-        docker stop article-generator 2>&1
-        docker rm -f article-generator 2>&1
-        timeout /t 3 /nobreak >nul
-    )
-)
+REM Force remove any existing container with the same name
+echo     - Forcing removal of any existing container...
+docker stop article-generator 2>nul
+docker rm -f article-generator 2>nul
+REM Give Docker time to release the container name
+timeout /t 5 /nobreak >nul
 
 REM Verify container is gone
 echo     - Verifying container removal...
 set "CONTAINER_GONE=false"
+set "MAX_ATTEMPTS=5"
+set "ATTEMPT=0"
 :verify_removal
+set /a ATTEMPT+=1
+if !ATTEMPT! gtr !MAX_ATTEMPTS! (
+    echo     - WARNING: Container still exists after !MAX_ATTEMPTS! attempts
+    goto launch_container
+)
+
+set "CONTAINER_FOUND=false"
 for /f "tokens=*" %%i in ('docker ps -a --filter "name=article-generator" --format "{{.Names}}" 2^>^&1') do (
     if "%%i"=="article-generator" (
+        set "CONTAINER_FOUND=true"
         echo     - Container still exists, waiting...
-        timeout /t 2 /nobreak >nul
+        timeout /t 3 /nobreak >nul
         goto verify_removal
     )
 )
-set "CONTAINER_GONE=true"
-echo     - Container verified removed
 
-REM Launch container
+if "!CONTAINER_FOUND!" equ "false" (
+    set "CONTAINER_GONE=true"
+    echo     - Container verified removed
+)
+
+:launch_container
+REM Launch container with retry mechanism
 echo     - Launching container...
+set "MAX_LAUNCH_ATTEMPTS=3"
+set "LAUNCH_ATTEMPT=0"
+:launch_attempt
+set /a LAUNCH_ATTEMPT+=1
+if !LAUNCH_ATTEMPT! gtr !MAX_LAUNCH_ATTEMPTS! (
+    echo     - ERROR: Failed to launch container after !MAX_LAUNCH_ATTEMPTS! attempts
+    goto launch_failed
+)
+
+REM Force remove any existing container one more time
+docker stop article-generator 2>nul
+docker rm -f article-generator 2>nul
+timeout /t 3 /nobreak >nul
+
 if defined ARK_API_KEY (
     echo     - Using ARK_API_KEY from environment
     docker run -d --name article-generator -p 5000:5000 -e PYTHONUNBUFFERED=1 -e ARK_API_KEY="!ARK_API_KEY!" -e ARK_BASE_URL="!ARK_BASE_URL!" -e ARK_MODEL="!ARK_MODEL!" article-generator:!CURRENT_VERSION!
@@ -133,7 +158,24 @@ if defined ARK_API_KEY (
     docker run -d --name article-generator -p 5000:5000 -e PYTHONUNBUFFERED=1 article-generator:!CURRENT_VERSION!
 )
 
-if %ERRORLEVEL% neq 0 (
+if %ERRORLEVEL% equ 0 (
+    goto launch_success
+) else (
+    echo     - Launch attempt !LAUNCH_ATTEMPT! failed, retrying...
+    timeout /t 3 /nobreak >nul
+    goto launch_attempt
+)
+
+:launch_success
+echo     - Container launched successfully
+set "LAUNCH_SUCCESS=true"
+goto post_launch
+
+:launch_failed
+set "LAUNCH_SUCCESS=false"
+
+:post_launch
+if not "!LAUNCH_SUCCESS!" equ "true" (
     echo.
     echo [ERROR] Failed to start container!
     exit /b 1
