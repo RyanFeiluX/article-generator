@@ -675,21 +675,28 @@ async def extract_title_and_content(text: str) -> tuple:
 async def improve_article(current_content: str, issues: List[str], style: str) -> str:
     issues_text = "\n".join([f"- {issue}" for issue in issues])
     
-    improvement_prompt = f"""Please improve the following article to address these issues:
+    improvement_prompt = f"""## Task: Improve Article Quality
+
+Please improve the following article to address the identified issues while preserving the core content and structure.
+
+## Issues to Fix:
 {issues_text}
 
-Current article:
+## Current Article:
 {current_content}
 
-Requirements:
-1. Keep the same general structure and key information
-2. Fix the identified issues
-3. Maintain consistent style: {style}
-4. Ensure the article is between {MIN_ARTICLE_LENGTH} and {MAX_ARTICLE_LENGTH} characters
+## Improvement Requirements:
+1. **Preserve Core Information**: Keep the main ideas and key information from the original
+2. **Fix Identified Issues**: Address the specific problems listed above
+3. **Enhance Logical Coherence**: Strengthen transitions between paragraphs for smoother flow
+4. **Maintain Consistent Style**: Keep the {style} writing style throughout
+5. **Expand Content**: If the article is too short, expand it to at least {MIN_ARTICLE_LENGTH} characters
+6. **Avoid Repetition**: Ensure content is not repetitive with appropriate information density
+7. **Ensure Fluency**: Use natural, fluent Chinese expression
 
 Provide the improved article with the same [Title] and [Content] format."""
     
-    return await generate_with_llm(improvement_prompt, "You are a professional article writer.")
+    return await generate_with_llm(improvement_prompt, "You are a professional article editor and optimization expert, skilled at enhancing article quality.")
 
 
 async def generate_article_stream(
@@ -716,35 +723,51 @@ async def generate_article_stream(
         # Step 2: Generate article
         yield send_progress("generating", "Generating article...", 30)
         
-        system_prompt = f"""你是一位专业的文章撰写专家。请根据提供的文本片段撰写高质量的文章。
+        system_prompt = f"""You are a professional article writing expert, skilled at merging multiple independent text snippets into a structurally complete, logically coherent, and high-quality article.
 
-要求：
-1. **标题必须使用中文**
-2. 撰写结构清晰的文章，包含引言、正文和结论
-3. 以提供的文本片段为主要线索进行综合和扩展
-4. 保持一致的风格：{style}
-5. 确保逻辑流畅、连贯
-6. **重要：文章正文必须超过500个中文字符**
-7. **重要：整篇文章（标题和正文）必须全部使用中文撰写**
-8. 不要逐字复制文本片段，要进行综合和扩展
+Core Tasks:
+- Analyze all provided text snippets and identify their internal connections and common themes
+- Integrate scattered information into an organic whole, avoiding fragmentation
+- Ensure natural and smooth transitions between paragraphs, forming a clear logical chain
 
-输出格式：
+Writing Requirements:
+1. **Title must be in Chinese**, accurately summarizing the core topic
+2. Article structure must include:
+   - Engaging Introduction: Overview of the article's theme and purpose
+   - Well-organized Body: Expand arguments based on text snippets, supporting core viewpoints
+   - Strong Conclusion: Summarize key points and reinforce core ideas
+3. **Style Consistency**: Maintain a consistent {style} style throughout the article
+4. **Logical Coherence**: Use appropriate transition words and connecting sentences for smooth paragraph transitions
+5. **Content Expansion**: Expand and analyze based on text snippets, not just simple repetition
+6. **Important: Article body must exceed 500 Chinese characters**
+7. **Important: Entire article (title and body) must be written in Chinese**
+8. **Avoid Verbatim Copying**: Reorganize and rephrase text snippets to maintain originality
+9. **Multi-source Integration**: When multiple snippets exist, merge them into a coherent narrative rather than listing them
+
+Output Format:
 [Title]
-中文标题
+Chinese Title
 
 [Content]
-中文正文内容。"""
+Chinese content here."""
 
-        user_prompt = f"""## 用户提供的文本片段：
+        user_prompt = f"""## Text Snippets Provided:
 {snippets_text}
 
-主题提示：{topic or '基于文本片段的通用文章'}
+## Topic:
+{topic or 'Comprehensive article based on text snippets'}
 
-请根据这些文本片段撰写一篇完整的文章。
-**要求**：
-1. 标题使用中文
-2. 正文使用中文
-3. 正文必须超过500个中文字符"""
+## Task:
+Please merge the above text snippets into a complete, coherent article.
+
+## Specific Requirements:
+1. **Integrate, Don't List**: Merge core information from all snippets into an organic whole, avoiding fragmented presentation
+2. **Logical Transitions**: Ensure natural transitions between paragraphs, forming clear logical flow
+3. **Content Expansion**: Expand appropriately based on snippet content, adding depth and breadth
+4. **Consistent Style**: Maintain {style} writing style throughout
+5. **Fluent Language**: Use natural, fluent Chinese expression
+6. **Catchy Title**: Title should accurately reflect the article theme and be engaging
+7. **Body Length**: Body must exceed 500 Chinese characters"""
 
         full_content = await generate_with_llm(user_prompt, system_prompt)
         
