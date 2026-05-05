@@ -7,7 +7,7 @@ REM Single container serves both Frontend & API
 REM ============================================
 
 REM Step 0: Bump version
-echo [0/7] Bumping version...
+echo [0/8] Bumping version...
 if exist "scripts\bump_version.bat" (
     call scripts\bump_version.bat
 )
@@ -21,7 +21,7 @@ echo     - Building version: !CURRENT_VERSION!
 
 REM Step 1: Stop and remove existing container (force cleanup)
 echo.
-echo [1/7] Stopping and removing existing container...
+echo [1/8] Stopping and removing existing container...
 set "CONTAINER_EXISTS=true"
 :check_container
 for /f "tokens=*" %%i in ('docker ps -a --filter "name=article-generator" --format "{{.Names}}" 2^>^&1') do (
@@ -42,10 +42,18 @@ echo     - No existing container found or container removed successfully
 REM Give Docker time to release the container name
 timeout /t 2 /nobreak >nul
 
-REM Step 2: Build Docker image
+REM Step 2: Create cache directories for Python/Node.js packages
 echo.
-echo [2/7] Building Docker image...
-docker build -t article-generator:!CURRENT_VERSION! --build-arg VERSION=!CURRENT_VERSION! --no-cache .
+echo [2/8] Creating cache directories...
+if not exist "cache\python" mkdir cache\python
+if not exist "cache\nodejs" mkdir cache\nodejs
+echo     - Cache directories ready
+
+REM Step 3: Build Docker image with BuildKit caching
+echo.
+echo [3/8] Building Docker image with BuildKit caching...
+set DOCKER_BUILDKIT=1
+docker build -t article-generator:!CURRENT_VERSION! --build-arg VERSION=!CURRENT_VERSION! .
 
 if %ERRORLEVEL% neq 0 (
     echo.
@@ -54,11 +62,11 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo.
-echo [3/7] Image built successfully: article-generator:!CURRENT_VERSION!
+echo [3/8] Image built successfully: article-generator:!CURRENT_VERSION!
 echo.
 
 REM Step 4: Clean up old images
-echo [4/7] Cleaning up old images...
+echo [4/8] Cleaning up old images...
 set "OLD_IMAGES_FOUND=false"
 rem Get current version without any whitespace
 for /f "tokens=*" %%v in ("!CURRENT_VERSION!") do set "CURRENT_VERSION_CLEAN=%%v"
@@ -75,67 +83,19 @@ if "!OLD_IMAGES_FOUND!" equ "false" (
     echo     - No old images to clean up
 )
 echo.
-echo [4/7] Image cleanup completed!
+echo [4/8] Image cleanup completed!
 echo.
 
-REM Step 5: Final container check and removal
-echo [5/7] Final container check and removal...
-echo     - Checking for existing container: article-generator
-for /f "tokens=*" %%i in ('docker ps -a --filter "name=article-generator" --format "{{.Names}}" 2^>^&1') do (
-    if "%%i"=="article-generator" (
-        echo     - Found container: article-generator
-        echo     - Stopping container: article-generator
-        docker stop article-generator 2>&1
-        echo     - Removing container: article-generator
-        docker rm -f article-generator 2>&1
-        REM Give Docker time to release the container name
-        timeout /t 3 /nobreak >nul
-    )
-)
-echo     - No existing container found or container removed successfully
-REM Give Docker time to release the container name
-timeout /t 2 /nobreak >nul
-
-REM Step 6: Final verification and container launch
-echo [6/7] Final verification and container launch...
-
-REM Force remove any existing container with the same name
-echo     - Forcing removal of any existing container...
+REM Step 5: Remove existing container before launch
+echo [5/8] Removing existing container before launch...
+echo     - Stopping and removing container if exists...
 docker stop article-generator 2>nul
 docker rm -f article-generator 2>nul
-REM Give Docker time to release the container name
-timeout /t 5 /nobreak >nul
+timeout /t 3 /nobreak >nul
+echo     - Container removed successfully or no existing container found
 
-REM Verify container is gone
-echo     - Verifying container removal...
-set "CONTAINER_GONE=false"
-set "MAX_ATTEMPTS=5"
-set "ATTEMPT=0"
-:verify_removal
-set /a ATTEMPT+=1
-if !ATTEMPT! gtr !MAX_ATTEMPTS! (
-    echo     - WARNING: Container still exists after !MAX_ATTEMPTS! attempts
-    goto launch_container
-)
-
-set "CONTAINER_FOUND=false"
-for /f "tokens=*" %%i in ('docker ps -a --filter "name=article-generator" --format "{{.Names}}" 2^>^&1') do (
-    if "%%i"=="article-generator" (
-        set "CONTAINER_FOUND=true"
-        echo     - Container still exists, waiting...
-        timeout /t 3 /nobreak >nul
-        goto verify_removal
-    )
-)
-
-if "!CONTAINER_FOUND!" equ "false" (
-    set "CONTAINER_GONE=true"
-    echo     - Container verified removed
-)
-
-:launch_container
-REM Launch container with retry mechanism
-echo     - Launching container...
+REM Step 6: Launch container
+echo [6/8] Launching container...
 set "MAX_LAUNCH_ATTEMPTS=3"
 set "LAUNCH_ATTEMPT=0"
 :launch_attempt
@@ -145,20 +105,45 @@ if !LAUNCH_ATTEMPT! gtr !MAX_LAUNCH_ATTEMPTS! (
     goto launch_failed
 )
 
-REM Force remove any existing container one more time
 docker stop article-generator 2>nul
 docker rm -f article-generator 2>nul
-timeout /t 3 /nobreak >nul
+
+set "CONTAINER_REMOVED=false"
+set "WAIT_ATTEMPTS=0"
+:wait_for_removal
+set /a WAIT_ATTEMPTS+=1
+if !WAIT_ATTEMPTS! gtr 10 (
+    goto skip_wait
+)
+set "FOUND=false"
+for /f "tokens=*" %%i in ('docker ps -a --filter "name=article-generator" --format "{{.Names}}" 2^>^&1') do (
+    if "%%i"=="article-generator" (
+        set "FOUND=true"
+    )
+)
+if "!FOUND!" equ "true" (
+    timeout /t 1 /nobreak >nul
+    goto wait_for_removal
+)
+set "CONTAINER_REMOVED=true"
+:skip_wait
 
 if defined ARK_API_KEY (
     echo     - Using ARK_API_KEY from environment
-    docker run -d --name article-generator -p 5000:5000 -e PYTHONUNBUFFERED=1 -e ARK_API_KEY="!ARK_API_KEY!" -e ARK_BASE_URL="!ARK_BASE_URL!" -e ARK_MODEL="!ARK_MODEL!" article-generator:!CURRENT_VERSION!
+    docker run -d --name article-generator -p 5000:5000 -e PYTHONUNBUFFERED=1 -e ARK_API_KEY="!ARK_API_KEY!" -e ARK_BASE_URL="!ARK_BASE_URL!" -e ARK_MODEL="!ARK_MODEL!" article-generator:!CURRENT_VERSION! 2>nul
 ) else (
     echo     - Running in demo mode (set ARK_API_KEY to enable AI)
-    docker run -d --name article-generator -p 5000:5000 -e PYTHONUNBUFFERED=1 article-generator:!CURRENT_VERSION!
+    docker run -d --name article-generator -p 5000:5000 -e PYTHONUNBUFFERED=1 article-generator:!CURRENT_VERSION! 2>nul
 )
 
-if %ERRORLEVEL% equ 0 (
+set "CONTAINER_CREATED=false"
+for /f "tokens=*" %%i in ('docker ps -a --filter "name=article-generator" --format "{{.Names}}" 2^>^&1') do (
+    if "%%i"=="article-generator" (
+        set "CONTAINER_CREATED=true"
+    )
+)
+
+if "!CONTAINER_CREATED!" equ "true" (
     goto launch_success
 ) else (
     echo     - Launch attempt !LAUNCH_ATTEMPT! failed, retrying...
@@ -183,7 +168,7 @@ if not "!LAUNCH_SUCCESS!" equ "true" (
 
 REM Step 7: Show status
 echo.
-echo [7/7] Setup complete!
+echo [7/8] Setup complete!
 echo.
 echo ===========================================
 echo    Article Generator v!CURRENT_VERSION!
@@ -205,7 +190,8 @@ echo.
 echo ===========================================
 echo.
 
-REM Wait for container to be ready
+REM Step 8: Show container logs
+echo [8/8] Showing container logs...
 echo Waiting for application to start...
 timeout /t 3 /nobreak >nul
 
