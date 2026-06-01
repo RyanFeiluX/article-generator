@@ -18,7 +18,7 @@ export interface GenerationProgress {
 }
 
 // Provider types
-export type LLMProvider = 'volc' | 'openai' | 'azure' | 'anthropic' | 'custom';
+export type LLMProvider = 'volc' | 'openai' | 'azure' | 'anthropic' | 'deepseek' | 'custom';
 
 // Provider-specific config interfaces
 export interface VolcConfig {
@@ -56,10 +56,19 @@ export interface AnthropicConfig {
   maxTokens: number;
 }
 
+export interface DeepSeekConfig {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  temperature: number;
+  maxTokens: number;
+  topP: number;
+}
+
 // Unified config interface
 export interface LLMConfig {
   provider: LLMProvider;
-  config: VolcConfig | OpenAIConfig | AzureConfig | AnthropicConfig;
+  config: VolcConfig | OpenAIConfig | AzureConfig | AnthropicConfig | DeepSeekConfig;
 }
 
 // Default provider configs
@@ -94,6 +103,14 @@ export const DEFAULT_PROVIDER_CONFIGS: Record<LLMProvider, any> = {
     model: 'claude-3-opus',
     temperature: 0.7,
     maxTokens: 4096
+  },
+  deepseek: {
+    apiKey: '',
+    baseUrl: 'https://api.deepseek.com/v1',
+    model: 'deepseek-v4-flash',
+    temperature: 0.7,
+    maxTokens: 4096,
+    topP: 0.95
   },
   custom: {
     apiKey: '',

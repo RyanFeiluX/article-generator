@@ -601,6 +601,50 @@ class AnthropicProvider(LLMProvider):
             raise Exception(f"Anthropic API request failed: {str(e)}")
 
 
+class DeepSeekProvider(LLMProvider):
+    async def generate(self, prompt: str, system_prompt: str, config: dict) -> str:
+        api_key = config.get("apiKey")
+        base_url = config.get("baseUrl", "https://api.deepseek.com/v1/chat/completions")
+        model = config.get("model", "deepseek-v4-flash")
+        temperature = config.get("temperature", 0.7)
+        max_tokens = config.get("maxTokens", 4096)
+        top_p = config.get("topP", 0.95)
+
+        if not api_key:
+            return await simulate_llm_response(prompt, error_detail="⚠️ 请在配置页面设置 DeepSeek API Key")
+        
+        print(f"[LLM] Using DeepSeek: model={model}", flush=True)
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "top_p": top_p
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=300.0) as client:
+                response = await client.post(base_url, headers=headers, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                content = result["choices"][0]["message"]["content"]
+                print(f"[LLM] DeepSeek response received, length={len(content)}", flush=True)
+                return content
+                    
+        except Exception as e:
+            print(f"[LLM] DeepSeek error: {e}", flush=True)
+            raise Exception(f"DeepSeek API request failed: {str(e)}")
+
+
 class CustomProvider(LLMProvider):
     async def generate(self, prompt: str, system_prompt: str, config: dict) -> str:
         api_key = config.get("apiKey")
@@ -657,6 +701,8 @@ class LLMProviderFactory:
             return AzureProvider()
         elif provider_type == "anthropic":
             return AnthropicProvider()
+        elif provider_type == "deepseek":
+            return DeepSeekProvider()
         elif provider_type == "custom":
             return CustomProvider()
         else:

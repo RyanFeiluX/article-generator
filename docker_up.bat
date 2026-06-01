@@ -183,12 +183,13 @@ echo    Version:    v!CURRENT_VERSION!
 echo    URL:        http://localhost:5000
 echo.
 if defined ARK_API_KEY (
-    echo    API Token:  ENABLED ^(Volc Engine ARK^)
+    echo    API Key:    ENV_VAR ^(Volc^)
+) else if defined OPENAI_API_KEY (
+    echo    API Key:    ENV_VAR ^(OpenAI^)
+) else if defined DEEPSEEK_API_KEY (
+    echo    API Key:    ENV_VAR ^(DeepSeek^)
 ) else (
-    echo    API Token:  DISABLED ^(demo mode^)
-    echo.
-    echo    To enable: set ARK_API_KEY=your_api_key
-    echo    Then run: docker_up.bat
+    echo    API Key:    UI_CONFIG ^(configure via Settings^)
 )
 echo.
 echo ===========================================

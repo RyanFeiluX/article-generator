@@ -170,13 +170,13 @@ echo "   Application:  http://localhost:${PORT}"
 echo "   Version:      ${CURRENT_VERSION}"
 echo ""
 if [ -n "$ARK_API_KEY" ]; then
-    echo -e "   AI Mode:      ${GREEN}Enabled${NC} (Volc Engine ARK)"
+    echo -e "   API Key:      ${GREEN}ENV_VAR${NC} (Volc)"
+elif [ -n "$OPENAI_API_KEY" ]; then
+    echo -e "   API Key:      ${GREEN}ENV_VAR${NC} (OpenAI)"
+elif [ -n "$DEEPSEEK_API_KEY" ]; then
+    echo -e "   API Key:      ${GREEN}ENV_VAR${NC} (DeepSeek)"
 else
-    echo -e "   AI Mode:      ${YELLOW}Demo${NC} (set ARK_API_KEY to enable)"
-    echo ""
-    echo "   To enable AI generation:"
-    echo "   export ARK_API_KEY=your_api_key"
-    echo "   Then run: ./docker_up.sh"
+    echo -e "   API Key:      ${BLUE}UI_CONFIG${NC} (configure via Settings)"
 fi
 echo ""
 echo "   To view logs:  docker logs -f article-generator"
