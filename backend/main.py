@@ -349,12 +349,21 @@ class SnippetInput(BaseModel):
     content: str = Field(..., min_length=1, max_length=100000)
     source: Optional[str] = None
 
+class LLMConfig(BaseModel):
+    apiKey: Optional[str] = None
+    baseUrl: Optional[str] = None
+    model: Optional[str] = None
+    temperature: Optional[float] = None
+    maxTokens: Optional[int] = None
+    topP: Optional[float] = None
+
 class ArticleRequest(BaseModel):
     snippets: List[SnippetInput] = Field(..., min_length=1, max_length=20)
     topic: Optional[str] = Field(None)
     style: Optional[str] = Field("informative")
     use_search: bool = Field(True)
     max_search_results: int = Field(5, ge=1, le=10)
+    llm_config: Optional[LLMConfig] = None
 
 class GenerationProgress(BaseModel):
     status: str
@@ -533,30 +542,45 @@ def verify_content_internal(content: str) -> dict:
     }
 
 
-async def generate_with_llm(prompt: str, system_prompt: str) -> str:
+async def generate_with_llm(prompt: str, system_prompt: str, llm_config: Optional[LLMConfig] = None) -> str:
     """Generate content using Volc Engine ARK API.
     
     In demo mode (no API key): returns a simulated response.
     In production mode (API key set): raises exception on any API failure so the caller
     can report the error to the user via the status panel.
-    """
-    print(f"[LLM] ARK_API_KEY set: {bool(ARK_API_KEY)}", flush=True)
-    print(f"[LLM] Base URL: {ARK_BASE_URL}", flush=True)
-    print(f"[LLM] Model: {ARK_MODEL}", flush=True)
     
-    if not ARK_API_KEY:
+    llm_config: Optional LLM configuration to override default settings
+    """
+    # Use config from request if provided, otherwise fall back to environment variables
+    api_key = llm_config.apiKey if llm_config and llm_config.apiKey else ARK_API_KEY
+    base_url = llm_config.baseUrl if llm_config and llm_config.baseUrl else ARK_BASE_URL
+    model = llm_config.model if llm_config and llm_config.model else ARK_MODEL
+    temperature = llm_config.temperature if llm_config and llm_config.temperature is not None else 0.7
+    max_tokens = llm_config.maxTokens if llm_config and llm_config.maxTokens else 16384
+    top_p = llm_config.topP if llm_config and llm_config.topP is not None else 0.95
+    
+    # Ensure base_url has a valid protocol
+    if base_url and not base_url.startswith(('http://', 'https://')):
+        base_url = f"https://{base_url}"
+    
+    print(f"[LLM] API Key set: {bool(api_key)}", flush=True)
+    print(f"[LLM] Base URL: {base_url}", flush=True)
+    print(f"[LLM] Model: {model}", flush=True)
+    print(f"[LLM] Temperature: {temperature}, Max Tokens: {max_tokens}, Top P: {top_p}", flush=True)
+    
+    if not api_key:
         # Demo mode: return simulated response
         print("[LLM] No API key - using demo mode", flush=True)
-        return await simulate_llm_response(prompt, error_detail="⚠️ 未设置 ARK_API_KEY 环境变量。系统运行在演示模式，需要配置 API Key 才能生成真实文章。")
+        return await simulate_llm_response(prompt, error_detail="⚠️ 未设置 ARK_API_KEY。系统运行在演示模式，需要配置 API Key 才能生成真实文章。")
     
     headers = {
-        "Authorization": f"Bearer {ARK_API_KEY}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
     
     # ARK API payload format - Chat Completions
     payload = {
-        "model": ARK_MODEL,
+        "model": model,
         "messages": [
             {
                 "role": "system",
@@ -567,13 +591,14 @@ async def generate_with_llm(prompt: str, system_prompt: str) -> str:
                 "content": prompt
             }
         ],
-        "temperature": 0.7,
-        "max_tokens": 16384,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "top_p": top_p,
         "stream": False
     }
     
-    print(f"[LLM] Calling ARK API: {ARK_BASE_URL}/chat/completions", flush=True)
-    print(f"[LLM] Token prefix: {ARK_API_KEY[:10]}...", flush=True)
+    print(f"[LLM] Calling ARK API: {base_url}/chat/completions", flush=True)
+    print(f"[LLM] Token prefix: {api_key[:10]}...", flush=True)
     
     async with httpx.AsyncClient(timeout=180.0) as client:
         try:
@@ -721,7 +746,8 @@ async def generate_article_stream(
     topic: Optional[str],
     style: str,
     use_search: bool,
-    max_search_results: int
+    max_search_results: int,
+    llm_config: Optional[LLMConfig] = None
 ) -> AsyncGenerator[str, None]:
     
     def send_progress(status: str, message: str, progress: float):
@@ -883,7 +909,8 @@ async def generate_article(request: ArticleRequest):
             topic=topic,
             style=request.style or "informative",
             use_search=request.use_search,
-            max_search_results=request.max_search_results
+            max_search_results=request.max_search_results,
+            llm_config=request.llm_config
         ),
         media_type="text/event-stream",
         headers={

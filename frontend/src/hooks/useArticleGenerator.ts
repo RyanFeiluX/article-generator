@@ -5,6 +5,7 @@ import type {
   GenerationProgress, 
   SearchSource
 } from '../types';
+import type { LLMConfig } from '../types';
 
 const STORAGE_KEY = 'article-generator-state';
 
@@ -15,6 +16,10 @@ interface StoredState {
   topic: string;
   style: string;
   useSearch: boolean;
+}
+
+interface UseArticleGeneratorProps {
+  llmConfig: LLMConfig;
 }
 
 interface UseArticleGeneratorReturn {
@@ -60,7 +65,7 @@ function saveStoredState(state: StoredState): void {
   }
 }
 
-export function useArticleGenerator(): UseArticleGeneratorReturn {
+export function useArticleGenerator({ llmConfig }: UseArticleGeneratorProps): UseArticleGeneratorReturn {
   const storedState = loadStoredState();
   
   const [snippets, setSnippets] = useState<Snippet[]>(storedState?.snippets || []);
@@ -175,7 +180,8 @@ export function useArticleGenerator(): UseArticleGeneratorReturn {
       topic: topic.trim() || undefined,
       style,
       use_search: useSearch,
-      max_search_results: 5
+      max_search_results: 5,
+      llm_config: llmConfig
     };
 
     console.log('[DEBUG] Sending request:', JSON.stringify(request, null, 2));

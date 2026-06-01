@@ -1,11 +1,45 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SnippetInput } from './components/SnippetInput';
 import { ProgressPanel } from './components/ProgressPanel';
 import { ArticleDisplay } from './components/ArticleDisplay';
 import { SensitiveWordsModal } from './components/SensitiveWordsModal';
+import { ConfigModal } from './components/ConfigModal';
+import type { LLMConfig } from './types';
 import { useArticleGenerator } from './hooks/useArticleGenerator';
 
 function App() {
+  const defaultConfig: LLMConfig = {
+    apiKey: '',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/text/v1/chat/completions',
+    model: 'doubao-pro',
+    temperature: 0.7,
+    maxTokens: 4096,
+    topP: 0.95
+  };
+
+  const [llmConfig, setLlmConfig] = useState<LLMConfig>(() => {
+    const saved = localStorage.getItem('llm-config');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return defaultConfig;
+      }
+    }
+    return defaultConfig;
+  });
+
+  const [showSensitiveWords, setShowSensitiveWords] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('llm-config', JSON.stringify(llmConfig));
+  }, [llmConfig]);
+
+  const handleConfigChange = (config: LLMConfig) => {
+    setLlmConfig(config);
+  };
+
   const {
     snippets,
     isGenerating,
@@ -25,9 +59,7 @@ function App() {
     setTopic,
     setStyle,
     setUseSearch
-  } = useArticleGenerator();
-
-  const [showSensitiveWords, setShowSensitiveWords] = useState(false);
+  } = useArticleGenerator({ llmConfig });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -40,6 +72,17 @@ function App() {
               <p className="text-sm text-gray-500">Transform your snippets into polished articles</p>
             </div>
             <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setShowConfig(true)}
+                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors flex items-center space-x-1"
+                title="LLM Settings"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span>Settings</span>
+              </button>
               <button
                 onClick={() => setShowSensitiveWords(true)}
                 className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors flex items-center space-x-1"
@@ -193,6 +236,14 @@ function App() {
       <SensitiveWordsModal
         isOpen={showSensitiveWords}
         onClose={() => setShowSensitiveWords(false)}
+      />
+
+      {/* Config Modal */}
+      <ConfigModal
+        isOpen={showConfig}
+        onClose={() => setShowConfig(false)}
+        config={llmConfig}
+        onConfigChange={handleConfigChange}
       />
     </div>
   );

@@ -17,6 +17,15 @@ export interface GenerationProgress {
   progress: number;
 }
 
+export interface LLMConfig {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  temperature: number;
+  maxTokens: number;
+  topP: number;
+}
+
 export interface ArticleRequest {
   snippets: Array<{
     content: string;
@@ -26,6 +35,7 @@ export interface ArticleRequest {
   style: string;
   use_search: boolean;
   max_search_results: number;
+  llm_config?: LLMConfig;
 }
 
 export interface GenerationComplete {
