@@ -34,7 +34,12 @@ COPY frontend/postcss.config.js /app/frontend/
 COPY frontend/tailwind.config.js /app/frontend/
 COPY VERSION /app/VERSION
 
-RUN VERSION=$(cat /app/VERSION | tr -d '\n\r') && echo "window.APP_VERSION = '${VERSION}';" > /app/frontend/public/version.js && \
+RUN if [ -f /app/VERSION ]; then \
+        VERSION=$(cat /app/VERSION | tr -d '\n\r'); \
+    else \
+        VERSION="0.1.0"; \
+    fi && \
+    echo "window.APP_VERSION = '${VERSION}';" > /app/frontend/public/version.js && \
     pnpm build
 
 FROM base AS final

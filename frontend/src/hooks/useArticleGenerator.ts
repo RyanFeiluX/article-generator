@@ -3,9 +3,9 @@ import type {
   Snippet, 
   ArticleRequest, 
   GenerationProgress, 
-  SearchSource
+  SearchSource,
+  LLMConfig
 } from '../types';
-import type { LLMConfig } from '../types';
 
 const STORAGE_KEY = 'article-generator-state';
 

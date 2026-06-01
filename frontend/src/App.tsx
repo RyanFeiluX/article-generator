@@ -5,23 +5,36 @@ import { ArticleDisplay } from './components/ArticleDisplay';
 import { SensitiveWordsModal } from './components/SensitiveWordsModal';
 import { ConfigModal } from './components/ConfigModal';
 import type { LLMConfig } from './types';
+import { DEFAULT_PROVIDER_CONFIGS } from './types';
 import { useArticleGenerator } from './hooks/useArticleGenerator';
 
 function App() {
+  // Default to Volc provider
   const defaultConfig: LLMConfig = {
-    apiKey: '',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/text/v1/chat/completions',
-    model: 'doubao-pro',
-    temperature: 0.7,
-    maxTokens: 4096,
-    topP: 0.95
+    provider: 'volc',
+    config: DEFAULT_PROVIDER_CONFIGS.volc
   };
 
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(() => {
     const saved = localStorage.getItem('llm-config');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        // Handle migration from old config format
+        if (parsed.apiKey && !parsed.provider) {
+          return {
+            provider: 'volc',
+            config: {
+              apiKey: parsed.apiKey,
+              baseUrl: parsed.baseUrl || 'https://ark.cn-beijing.volces.com/api/v3',
+              model: parsed.model || 'doubao-pro',
+              temperature: parsed.temperature || 0.7,
+              maxTokens: parsed.maxTokens || 4096,
+              topP: parsed.topP || 0.95
+            }
+          };
+        }
+        return parsed;
       } catch {
         return defaultConfig;
       }

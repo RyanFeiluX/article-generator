@@ -18,6 +18,7 @@ import os
 import json
 from typing import List, Optional, AsyncGenerator
 from datetime import datetime
+from abc import ABC, abstractmethod
 from pydantic import BaseModel, Field, field_validator
 
 from fastapi import FastAPI, HTTPException, Request
@@ -349,13 +350,317 @@ class SnippetInput(BaseModel):
     content: str = Field(..., min_length=1, max_length=100000)
     source: Optional[str] = None
 
-class LLMConfig(BaseModel):
+# LLM Provider specific config models
+class VolcConfig(BaseModel):
     apiKey: Optional[str] = None
     baseUrl: Optional[str] = None
     model: Optional[str] = None
     temperature: Optional[float] = None
     maxTokens: Optional[int] = None
     topP: Optional[float] = None
+
+class OpenAIConfig(BaseModel):
+    apiKey: Optional[str] = None
+    baseUrl: Optional[str] = None
+    model: Optional[str] = None
+    temperature: Optional[float] = None
+    maxTokens: Optional[int] = None
+    topP: Optional[float] = None
+
+class AzureConfig(BaseModel):
+    apiKey: Optional[str] = None
+    endpoint: Optional[str] = None
+    deploymentName: Optional[str] = None
+    apiVersion: Optional[str] = None
+    temperature: Optional[float] = None
+    maxTokens: Optional[int] = None
+
+class AnthropicConfig(BaseModel):
+    apiKey: Optional[str] = None
+    baseUrl: Optional[str] = None
+    model: Optional[str] = None
+    temperature: Optional[float] = None
+    maxTokens: Optional[int] = None
+
+class CustomConfig(BaseModel):
+    apiKey: Optional[str] = None
+    baseUrl: Optional[str] = None
+    model: Optional[str] = None
+    temperature: Optional[float] = None
+    maxTokens: Optional[int] = None
+    topP: Optional[float] = None
+
+# Unified LLM Config
+class LLMConfig(BaseModel):
+    provider: str = "volc"
+    config: Optional[VolcConfig | OpenAIConfig | AzureConfig | AnthropicConfig | CustomConfig] = None
+
+
+# LLM Provider Interface and Implementations
+class LLMProvider(ABC):
+    @abstractmethod
+    async def generate(self, prompt: str, system_prompt: str, config: dict) -> str:
+        pass
+
+
+class VolcProvider(LLMProvider):
+    async def generate(self, prompt: str, system_prompt: str, config: dict) -> str:
+        api_key = config.get("apiKey") or ARK_API_KEY
+        base_url = config.get("baseUrl") or ARK_BASE_URL
+        model = config.get("model") or ARK_MODEL
+        temperature = config.get("temperature") or 0.7
+        max_tokens = config.get("maxTokens") or 4096
+        top_p = config.get("topP") or 0.95
+
+        if not api_key:
+            return await simulate_llm_response(prompt, error_detail="⚠️ 未设置 ARK_API_KEY 环境变量，请在服务端或前端配置页面设置。")
+        
+        # Fix base URL to ensure it's correct
+        if base_url and not base_url.endswith("/chat/completions") and not base_url.endswith("/v1"):
+            if not base_url.endswith("/"):
+                base_url += "/"
+            base_url += "chat/completions"
+        elif base_url and base_url.endswith("/v1"):
+            base_url += "/chat/completions"
+        
+        print(f"[LLM] Using Volc Engine ARK: base={base_url}, model={model}", flush=True)
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "top_p": top_p,
+            "stream": False
+        }
+        
+        print(f"[LLM] Sending request to Volc Engine ARK", flush=True)
+        
+        try:
+            async with httpx.AsyncClient(timeout=300.0) as client:
+                response = await client.post(
+                    base_url,
+                    headers=headers,
+                    json=payload
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                if "choices" in result and len(result["choices"]) > 0:
+                    content = result["choices"][0]["message"]["content"]
+                    print(f"[LLM] Volc Engine ARK response received, length={len(content)}", flush=True)
+                    return content
+                else:
+                    print(f"[LLM] Unexpected response format: {result}", flush=True)
+                    raise Exception("Invalid response format from LLM API")
+                    
+        except httpx.HTTPError as e:
+            print(f"[LLM] HTTP error: {e}", flush=True)
+            raise Exception(f"Volc Engine ARK API request failed: {str(e)}")
+
+
+class OpenAIProvider(LLMProvider):
+    async def generate(self, prompt: str, system_prompt: str, config: dict) -> str:
+        api_key = config.get("apiKey")
+        base_url = config.get("baseUrl", "https://api.openai.com/v1/chat/completions")
+        model = config.get("model", "gpt-4")
+        temperature = config.get("temperature", 0.7)
+        max_tokens = config.get("maxTokens", 4096)
+        top_p = config.get("topP", 0.95)
+
+        if not api_key:
+            return await simulate_llm_response(prompt, error_detail="⚠️ 请在配置页面设置 OpenAI API Key")
+        
+        print(f"[LLM] Using OpenAI: model={model}", flush=True)
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "top_p": top_p
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=300.0) as client:
+                response = await client.post(
+                    base_url,
+                    headers=headers,
+                    json=payload
+                )
+                response.raise_for_status()
+                result = response.json()
+                content = result["choices"][0]["message"]["content"]
+                print(f"[LLM] OpenAI response received, length={len(content)}", flush=True)
+                return content
+                    
+        except Exception as e:
+            print(f"[LLM] OpenAI error: {e}", flush=True)
+            raise Exception(f"OpenAI API request failed: {str(e)}")
+
+
+class AzureProvider(LLMProvider):
+    async def generate(self, prompt: str, system_prompt: str, config: dict) -> str:
+        api_key = config.get("apiKey")
+        endpoint = config.get("endpoint")
+        deployment_name = config.get("deploymentName")
+        api_version = config.get("apiVersion", "2024-02-15-preview")
+        temperature = config.get("temperature", 0.7)
+        max_tokens = config.get("maxTokens", 4096)
+
+        if not api_key or not endpoint or not deployment_name:
+            return await simulate_llm_response(prompt, error_detail="⚠️ 请在配置页面完整填写 Azure OpenAI 配置")
+        
+        url = f"{endpoint}/openai/deployments/{deployment_name}/chat/completions?api-version={api_version}"
+        print(f"[LLM] Using Azure OpenAI: deployment={deployment_name}", flush=True)
+        
+        headers = {
+            "api-key": api_key,
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=300.0) as client:
+                response = await client.post(url, headers=headers, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                content = result["choices"][0]["message"]["content"]
+                print(f"[LLM] Azure OpenAI response received, length={len(content)}", flush=True)
+                return content
+                    
+        except Exception as e:
+            print(f"[LLM] Azure OpenAI error: {e}", flush=True)
+            raise Exception(f"Azure OpenAI API request failed: {str(e)}")
+
+
+class AnthropicProvider(LLMProvider):
+    async def generate(self, prompt: str, system_prompt: str, config: dict) -> str:
+        api_key = config.get("apiKey")
+        base_url = config.get("baseUrl", "https://api.anthropic.com/v1/messages")
+        model = config.get("model", "claude-3-opus-20240229")
+        temperature = config.get("temperature", 0.7)
+        max_tokens = config.get("maxTokens", 4096)
+
+        if not api_key:
+            return await simulate_llm_response(prompt, error_detail="⚠️ 请在配置页面设置 Anthropic API Key")
+        
+        print(f"[LLM] Using Anthropic: model={model}", flush=True)
+        
+        headers = {
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "system": system_prompt,
+            "temperature": temperature,
+            "max_tokens": max_tokens
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=300.0) as client:
+                response = await client.post(base_url, headers=headers, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                content = result["content"][0]["text"]
+                print(f"[LLM] Anthropic response received, length={len(content)}", flush=True)
+                return content
+                    
+        except Exception as e:
+            print(f"[LLM] Anthropic error: {e}", flush=True)
+            raise Exception(f"Anthropic API request failed: {str(e)}")
+
+
+class CustomProvider(LLMProvider):
+    async def generate(self, prompt: str, system_prompt: str, config: dict) -> str:
+        api_key = config.get("apiKey")
+        base_url = config.get("baseUrl")
+        model = config.get("model")
+        temperature = config.get("temperature", 0.7)
+        max_tokens = config.get("maxTokens", 4096)
+        top_p = config.get("topP", 0.95)
+
+        if not api_key or not base_url or not model:
+            return await simulate_llm_response(prompt, error_detail="⚠️ 请在配置页面完整填写 Custom API 配置")
+        
+        print(f"[LLM] Using Custom API: base={base_url}, model={model}", flush=True)
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "top_p": top_p
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=300.0) as client:
+                response = await client.post(base_url, headers=headers, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                content = result["choices"][0]["message"]["content"]
+                print(f"[LLM] Custom API response received, length={len(content)}", flush=True)
+                return content
+                    
+        except Exception as e:
+            print(f"[LLM] Custom API error: {e}", flush=True)
+            raise Exception(f"Custom API request failed: {str(e)}")
+
+
+# Provider Factory
+class LLMProviderFactory:
+    @staticmethod
+    def get_provider(provider_type: str) -> LLMProvider:
+        if provider_type == "volc":
+            return VolcProvider()
+        elif provider_type == "openai":
+            return OpenAIProvider()
+        elif provider_type == "azure":
+            return AzureProvider()
+        elif provider_type == "anthropic":
+            return AnthropicProvider()
+        elif provider_type == "custom":
+            return CustomProvider()
+        else:
+            return VolcProvider()  # Default to Volc
 
 class ArticleRequest(BaseModel):
     snippets: List[SnippetInput] = Field(..., min_length=1, max_length=20)
@@ -543,129 +848,28 @@ def verify_content_internal(content: str) -> dict:
 
 
 async def generate_with_llm(prompt: str, system_prompt: str, llm_config: Optional[LLMConfig] = None) -> str:
-    """Generate content using Volc Engine ARK API.
+    """Generate content using the specified LLM provider.
     
-    In demo mode (no API key): returns a simulated response.
-    In production mode (API key set): raises exception on any API failure so the caller
+    In demo mode (no API key configured): returns a simulated response.
+    In production mode: raises exception on any API failure so the caller
     can report the error to the user via the status panel.
     
-    llm_config: Optional LLM configuration to override default settings
+    llm_config: Optional LLM configuration with provider and settings
     """
-    # Use config from request if provided, otherwise fall back to environment variables
-    api_key = llm_config.apiKey if llm_config and llm_config.apiKey else ARK_API_KEY
-    base_url = llm_config.baseUrl if llm_config and llm_config.baseUrl else ARK_BASE_URL
-    model = llm_config.model if llm_config and llm_config.model else ARK_MODEL
-    temperature = llm_config.temperature if llm_config and llm_config.temperature is not None else 0.7
-    max_tokens = llm_config.maxTokens if llm_config and llm_config.maxTokens else 16384
-    top_p = llm_config.topP if llm_config and llm_config.topP is not None else 0.95
+    # Determine provider and config
+    provider_type = llm_config.provider if llm_config and llm_config.provider else "volc"
+    config_dict = llm_config.config.model_dump() if (llm_config and llm_config.config) else {}
     
-    # Ensure base_url has a valid protocol
-    if base_url and not base_url.startswith(('http://', 'https://')):
-        base_url = f"https://{base_url}"
+    print(f"[LLM] Using provider: {provider_type}", flush=True)
     
-    print(f"[LLM] API Key set: {bool(api_key)}", flush=True)
-    print(f"[LLM] Base URL: {base_url}", flush=True)
-    print(f"[LLM] Model: {model}", flush=True)
-    print(f"[LLM] Temperature: {temperature}, Max Tokens: {max_tokens}, Top P: {top_p}", flush=True)
+    # Get provider from factory
+    provider = LLMProviderFactory.get_provider(provider_type)
     
-    if not api_key:
-        # Demo mode: return simulated response
-        print("[LLM] No API key - using demo mode", flush=True)
-        return await simulate_llm_response(prompt, error_detail="⚠️ 未设置 ARK_API_KEY。系统运行在演示模式，需要配置 API Key 才能生成真实文章。")
-    
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    
-    # ARK API payload format - Chat Completions
-    payload = {
-        "model": model,
-        "messages": [
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-        "top_p": top_p,
-        "stream": False
-    }
-    
-    print(f"[LLM] Calling ARK API: {base_url}/chat/completions", flush=True)
-    print(f"[LLM] Token prefix: {api_key[:10]}...", flush=True)
-    
-    async with httpx.AsyncClient(timeout=180.0) as client:
-        try:
-            response = await client.post(
-                f"{ARK_BASE_URL}/chat/completions",
-                headers=headers,
-                json=payload
-            )
-            print(f"[LLM] Response status: {response.status_code}", flush=True)
-            
-            if response.status_code == 401 or response.status_code == 403:
-                error_detail = response.text[:300]
-                print(f"[LLM] Authentication failed: {error_detail}", flush=True)
-                raise Exception(f"API Key 无效或已过期 (HTTP {response.status_code})。请检查 ARK_API_KEY 配置。")
-            
-            response.raise_for_status()
-            data = response.json()
-            print(f"[LLM] Response data keys: {data.keys() if isinstance(data, dict) else 'not dict'}", flush=True)
-            
-            # Chat Completions response format: {"choices": [{"message": {"content": "..."}}]}
-            result_text = ""
-            
-            if data.get("choices") and isinstance(data["choices"], list):
-                for choice in data["choices"]:
-                    if isinstance(choice, dict) and choice.get("message"):
-                        content = choice["message"].get("content")
-                        if content:
-                            result_text = content
-                            print(f"[LLM] Found content with length {len(result_text)}", flush=True)
-                            break
-            
-            if result_text:
-                print(f"[LLM] Generated content length: {len(result_text)}", flush=True)
-                return result_text
-            
-            # Check for error
-            if data.get("error"):
-                error_msg = data["error"].get("message", "Unknown API error")
-                print(f"[LLM] API error: {error_msg}", flush=True)
-                raise Exception(f"LLM API 返回错误: {error_msg}")
-            
-            print(f"[LLM] Full response: {str(data)[:500]}", flush=True)
-            print("[LLM] No content in response", flush=True)
-            raise Exception("LLM API 响应格式异常，未能提取到内容。请检查模型配置。")
-            
-        except httpx.HTTPStatusError as e:
-            print(f"[LLM] HTTP error: {e.response.status_code} - {e.response.text[:500]}", flush=True)
-            if e.response.status_code in [401, 403]:
-                raise Exception(f"API Key 无效或已过期 (HTTP {e.response.status_code})。请检查 ARK_API_KEY 配置。")
-            if e.response.status_code == 404:
-                raise Exception(f"API 端点不存在 (HTTP 404)。请检查 ARK_BASE_URL 配置。")
-            raise Exception(f"LLM API 请求失败 (HTTP {e.response.status_code})")
-            
-        except httpx.ConnectError as e:
-            print(f"[LLM] Connection error: {str(e)}", flush=True)
-            raise Exception("无法连接到 LLM API 服务器。请检查网络连接和 ARK_BASE_URL 配置。")
-            
-        except httpx.TimeoutException:
-            print("[LLM] Request timeout", flush=True)
-            raise Exception("LLM API 请求超时（180秒）。请稍后重试或检查网络。")
-            
-        except Exception as e:
-            # Re-raise if we already created a descriptive Exception
-            if isinstance(e, Exception) and not isinstance(e, (httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException)):
-                raise
-            print(f"[LLM] Error: {type(e).__name__}: {str(e)}", flush=True)
-            raise Exception(f"LLM API 调用失败: {str(e)}")
+    try:
+        return await provider.generate(prompt, system_prompt, config_dict)
+    except Exception as e:
+        print(f"[LLM] Error from provider {provider_type}: {e}", flush=True)
+        raise
 
 
 async def simulate_llm_response(prompt: str, error_detail: str = None) -> str:
