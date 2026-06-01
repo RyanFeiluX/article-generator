@@ -198,10 +198,9 @@ if not ARK_BASE_URL.startswith(('http://', 'https://')):
 ARK_MODEL = os.getenv("ARK_MODEL", "ep-20260413174919-nqclc")
 
 # Constants for content verification
-MIN_ARTICLE_LENGTH = 500  # Minimum characters
-MAX_ARTICLE_LENGTH = 30000  # Maximum characters
+MIN_ARTICLE_LENGTH = 3000  # Minimum characters for a substantive article
 MAX_DUPLICATION_RATIO = 0.25  # Maximum allowed duplication ratio
-MIN_SENTENCE_COUNT = 3  # Minimum sentences for logical flow check
+MIN_SENTENCE_COUNT = 8  # Minimum sentences for logical flow check
 MAX_RETRY_ATTEMPTS = 3  # Maximum retry attempts on verification failure
 
 # Sensitive words configuration (configurable per category)
@@ -363,6 +362,16 @@ class GenerationProgress(BaseModel):
     progress: float = 0.0
 
 
+def compute_target_length(snippets: List[SnippetInput]) -> int:
+    """Compute the target article length dynamically based on input size.
+    
+    The output must be at least max(MIN_ARTICLE_LENGTH, 2x total input chars).
+    This ensures short snippets get substantial supplementation.
+    """
+    total_input_chars = sum(len(s.content) for s in snippets)
+    return max(MIN_ARTICLE_LENGTH, total_input_chars * 2)
+
+
 # ============== Helper Functions ==============
 
 def check_sensitive_words(text: str) -> List[str]:
@@ -464,9 +473,7 @@ def check_size_constraints(text: str) -> dict:
     return {
         'char_count': char_count,
         'word_count': word_count,
-        'meets_minimum': char_count >= MIN_ARTICLE_LENGTH,
-        'meets_maximum': char_count <= MAX_ARTICLE_LENGTH,
-        'optimal_range': MIN_ARTICLE_LENGTH <= char_count <= 10000
+        'meets_minimum': char_count >= MIN_ARTICLE_LENGTH
     }
 
 
@@ -490,9 +497,6 @@ def verify_content_internal(content: str) -> dict:
     if not size_check['meets_minimum']:
         issues.append(f"文章过短 (仅 {size_check['char_count']} 字符，需要至少 {MIN_ARTICLE_LENGTH})")
         score -= 25
-    if not size_check['meets_maximum']:
-        issues.append(f"文章过长 ({size_check['char_count']} 字符，最多 {MAX_ARTICLE_LENGTH})")
-        score -= 20
     
     dup_ratio = check_duplication(modified_content)
     if dup_ratio > MAX_DUPLICATION_RATIO:
@@ -530,7 +534,12 @@ def verify_content_internal(content: str) -> dict:
 
 
 async def generate_with_llm(prompt: str, system_prompt: str) -> str:
-    """Generate content using Volc Engine ARK API"""
+    """Generate content using Volc Engine ARK API.
+    
+    In demo mode (no API key): returns a simulated response.
+    In production mode (API key set): raises exception on any API failure so the caller
+    can report the error to the user via the status panel.
+    """
     print(f"[LLM] ARK_API_KEY set: {bool(ARK_API_KEY)}", flush=True)
     print(f"[LLM] Base URL: {ARK_BASE_URL}", flush=True)
     print(f"[LLM] Model: {ARK_MODEL}", flush=True)
@@ -558,13 +567,15 @@ async def generate_with_llm(prompt: str, system_prompt: str) -> str:
                 "content": prompt
             }
         ],
-        "temperature": 0.7
+        "temperature": 0.7,
+        "max_tokens": 16384,
+        "stream": False
     }
     
     print(f"[LLM] Calling ARK API: {ARK_BASE_URL}/chat/completions", flush=True)
     print(f"[LLM] Token prefix: {ARK_API_KEY[:10]}...", flush=True)
     
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=180.0) as client:
         try:
             response = await client.post(
                 f"{ARK_BASE_URL}/chat/completions",
@@ -574,8 +585,9 @@ async def generate_with_llm(prompt: str, system_prompt: str) -> str:
             print(f"[LLM] Response status: {response.status_code}", flush=True)
             
             if response.status_code == 401 or response.status_code == 403:
-                print(f"[LLM] Authentication failed: {response.text[:200]}", flush=True)
-                return await simulate_llm_response(prompt, error_detail="⚠️ API Key 无效或已过期 (401/403)。请检查 ARK_API_KEY 是否正确配置。")
+                error_detail = response.text[:300]
+                print(f"[LLM] Authentication failed: {error_detail}", flush=True)
+                raise Exception(f"API Key 无效或已过期 (HTTP {response.status_code})。请检查 ARK_API_KEY 配置。")
             
             response.raise_for_status()
             data = response.json()
@@ -601,31 +613,34 @@ async def generate_with_llm(prompt: str, system_prompt: str) -> str:
             if data.get("error"):
                 error_msg = data["error"].get("message", "Unknown API error")
                 print(f"[LLM] API error: {error_msg}", flush=True)
-                return await simulate_llm_response(prompt, error_detail=f"⚠️ API 返回错误: {error_msg}")
+                raise Exception(f"LLM API 返回错误: {error_msg}")
             
             print(f"[LLM] Full response: {str(data)[:500]}", flush=True)
             print("[LLM] No content in response", flush=True)
-            return await simulate_llm_response(prompt, error_detail="⚠️ API 响应格式异常，未能生成内容。")
+            raise Exception("LLM API 响应格式异常，未能提取到内容。请检查模型配置。")
             
         except httpx.HTTPStatusError as e:
             print(f"[LLM] HTTP error: {e.response.status_code} - {e.response.text[:500]}", flush=True)
             if e.response.status_code in [401, 403]:
-                return await simulate_llm_response(prompt, error_detail="⚠️ API Key 无效或已过期。请检查 ARK_API_KEY 配置。")
+                raise Exception(f"API Key 无效或已过期 (HTTP {e.response.status_code})。请检查 ARK_API_KEY 配置。")
             if e.response.status_code == 404:
-                return await simulate_llm_response(prompt, error_detail="⚠️ API 端点不存在 (404)。请检查 ARK_BASE_URL 配置。")
-            return await simulate_llm_response(prompt, error_detail=f"⚠️ HTTP 错误 {e.response.status_code}: API 请求失败")
+                raise Exception(f"API 端点不存在 (HTTP 404)。请检查 ARK_BASE_URL 配置。")
+            raise Exception(f"LLM API 请求失败 (HTTP {e.response.status_code})")
             
         except httpx.ConnectError as e:
             print(f"[LLM] Connection error: {str(e)}", flush=True)
-            return await simulate_llm_response(prompt, error_detail="⚠️ 无法连接到 ARK API 服务器。请检查网络连接。")
+            raise Exception("无法连接到 LLM API 服务器。请检查网络连接和 ARK_BASE_URL 配置。")
             
         except httpx.TimeoutException:
             print("[LLM] Request timeout", flush=True)
-            return await simulate_llm_response(prompt, error_detail="⚠️ API 请求超时。请稍后重试。")
+            raise Exception("LLM API 请求超时（180秒）。请稍后重试或检查网络。")
             
         except Exception as e:
+            # Re-raise if we already created a descriptive Exception
+            if isinstance(e, Exception) and not isinstance(e, (httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException)):
+                raise
             print(f"[LLM] Error: {type(e).__name__}: {str(e)}", flush=True)
-            return await simulate_llm_response(prompt, error_detail=f"⚠️ 发生错误: {str(e)}")
+            raise Exception(f"LLM API 调用失败: {str(e)}")
 
 
 async def simulate_llm_response(prompt: str, error_detail: str = None) -> str:
@@ -675,9 +690,9 @@ async def extract_title_and_content(text: str) -> tuple:
 async def improve_article(current_content: str, issues: List[str], style: str) -> str:
     issues_text = "\n".join([f"- {issue}" for issue in issues])
     
-    improvement_prompt = f"""## Task: Improve Article Quality
+    improvement_prompt = f"""## Task: Improve Article Quality (EXPANSION ONLY — No Shrinking)
 
-Please improve the following article to address the identified issues while preserving the core content and structure.
+Please improve the following article to address the identified issues. CRITICAL: You must ONLY expand and enhance the article — NEVER shorten, summarize, or remove content.
 
 ## Issues to Fix:
 {issues_text}
@@ -686,17 +701,19 @@ Please improve the following article to address the identified issues while pres
 {current_content}
 
 ## Improvement Requirements:
-1. **Preserve Core Information**: Keep the main ideas and key information from the original
-2. **Fix Identified Issues**: Address the specific problems listed above
-3. **Enhance Logical Coherence**: Strengthen transitions between paragraphs for smoother flow
-4. **Maintain Consistent Style**: Keep the {style} writing style throughout
-5. **Expand Content**: If the article is too short, expand it to at least {MIN_ARTICLE_LENGTH} characters
-6. **Avoid Repetition**: Ensure content is not repetitive with appropriate information density
-7. **Ensure Fluency**: Use natural, fluent Chinese expression
+1. **Anti-Shrink Rule (MOST IMPORTANT)**: The article length must NOT decrease. Only ADD content to fix issues. If you need to fix repetition, REPLACE repeated content with new substantive content of equal or greater length.
+2. **Preserve Core Information**: Keep the main ideas and key information from the original — do not delete meaningful content
+3. **Fix Identified Issues**: Address the specific problems listed above by adding better transitions, explanations, and structure
+4. **Enhance Logical Coherence**: Strengthen transitions between paragraphs for smoother flow by adding connective content
+5. **Maintain Consistent Style**: Keep the {style} writing style throughout
+6. **Expand Content**: If the article is below {MIN_ARTICLE_LENGTH} characters, expand existing sections with additional details, examples, or explanations
+7. **Avoid Repetition**: If content is repetitive, replace repeated sections with fresh, informative content rather than simply deleting
+8. **Ensure Fluency**: Use natural, fluent Chinese expression
+9. **Chinese Only**: Entire article must be in Chinese
 
 Provide the improved article with the same [Title] and [Content] format."""
-    
-    return await generate_with_llm(improvement_prompt, "You are a professional article editor and optimization expert, skilled at enhancing article quality.")
+
+    return await generate_with_llm(improvement_prompt, "You are a professional article editor who fixes issues by enriching and expanding content — never by shrinking or removing it.")
 
 
 async def generate_article_stream(
@@ -720,29 +737,30 @@ async def generate_article_stream(
             for i, s in enumerate(snippets)
         ])
         
-        # Step 2: Generate article
-        yield send_progress("generating", "Generating article...", 30)
+        # Step 2: First pass - Combine all snippets into a coherent article
+        yield send_progress("generating", "正在合并文本片段并补充内容...", 20)
         
-        system_prompt = f"""You are a professional article writing expert, skilled at merging multiple independent text snippets into a structurally complete, logically coherent, and high-quality article.
+        # Compute dynamic target length
+        target_len = compute_target_length(snippets)
+        total_input = sum(len(s.content) for s in snippets)
+        
+        # First prompt: Combine snippets AND expand short content with supplementary material
+        combine_prompt = f"""## Text Snippets:
+{snippets_text}
 
-Core Tasks:
-- Analyze all provided text snippets and identify their internal connections and common themes
-- Integrate scattered information into an organic whole, avoiding fragmentation
-- Ensure natural and smooth transitions between paragraphs, forming a clear logical chain
+## Topic: {topic or 'Comprehensive article based on text snippets'}
+## Target: At least {target_len} characters (input is {total_input} chars — add ~{target_len - total_input} chars of supplementary content)
 
-Writing Requirements:
-1. **Title must be in Chinese**, accurately summarizing the core topic
-2. Article structure must include:
-   - Engaging Introduction: Overview of the article's theme and purpose
-   - Well-organized Body: Expand arguments based on text snippets, supporting core viewpoints
-   - Strong Conclusion: Summarize key points and reinforce core ideas
-3. **Style Consistency**: Maintain a consistent {style} style throughout the article
-4. **Logical Coherence**: Use appropriate transition words and connecting sentences for smooth paragraph transitions
-5. **Content Expansion**: Expand and analyze based on text snippets, not just simple repetition
-6. **Important: Article body must exceed 500 Chinese characters**
-7. **Important: Entire article (title and body) must be written in Chinese**
-8. **Avoid Verbatim Copying**: Reorganize and rephrase text snippets to maintain originality
-9. **Multi-source Integration**: When multiple snippets exist, merge them into a coherent narrative rather than listing them
+## Task: Create a SUBSTANTIVE article by combining snippets AND generating supplementary content. EXPAND, never shrink.
+
+## Requirements:
+1. **Anti-Shrink**: Never condense or summarize snippets. All original content must remain and be built upon.
+2. **Supplement**: Add background context, explanations, examples, analysis, implications, or related concepts based on the snippets.
+3. **Length**: Final article must be at least {target_len} characters. Compensate short input with well-developed supplementary material.
+4. **Coherence**: All content — original and generated — must form one unified narrative with smooth transitions.
+5. **Structure**: Include introduction, well-developed body, and conclusion.
+6. **Engaging title**: 10-20 Chinese characters reflecting the full scope.
+7. **Chinese only**.
 
 Output Format:
 [Title]
@@ -751,27 +769,35 @@ Chinese Title
 [Content]
 Chinese content here."""
 
-        user_prompt = f"""## Text Snippets Provided:
-{snippets_text}
-
-## Topic:
-{topic or 'Comprehensive article based on text snippets'}
-
-## Task:
-Please merge the above text snippets into a complete, coherent article.
-
-## Specific Requirements:
-1. **Integrate, Don't List**: Merge core information from all snippets into an organic whole, avoiding fragmented presentation
-2. **Logical Transitions**: Ensure natural transitions between paragraphs, forming clear logical flow
-3. **Content Expansion**: Expand appropriately based on snippet content, adding depth and breadth
-4. **Consistent Style**: Maintain {style} writing style throughout
-5. **Fluent Language**: Use natural, fluent Chinese expression
-6. **Catchy Title**: Title should accurately reflect the article theme and be engaging
-7. **Body Length**: Body must exceed 500 Chinese characters"""
-
-        full_content = await generate_with_llm(user_prompt, system_prompt)
+        full_content = await generate_with_llm(combine_prompt, "You are an expert article writer who expands brief content into comprehensive articles. Never summarize — always build upon and enrich input.")
         
         title, clean_content = await extract_title_and_content(full_content)
+        
+        # Step 3: Single comprehensive improvement pass to enhance quality
+        yield send_progress("improving", "正在优化文章质量...", 40)
+        
+        improve_prompt = f"""## Article to Improve:
+{full_content}
+
+## Target: Produce a polished article of at least {target_len} characters. Never shorten — only enhance and expand.
+
+## Improvement Focus:
+1. **Anti-Shrink**: Do NOT remove or condense any content. Only add, refine, and expand.
+2. **Smooth flow**: Add transitions between paragraphs and ensure logical progression of ideas.
+3. **Clarity & depth**: Make complex ideas clearer; expand thin sections with examples, context, or explanation.
+4. **Structure**: Ensure clear introduction, well-developed body paragraphs, and a meaningful conclusion.
+5. **Professional tone**: Use precise, professional language in {style} style.
+6. **Chinese only**.
+
+Output Format:
+[Title]
+Chinese Title
+
+[Content]
+Improved Chinese content here."""
+
+        enhanced_content = await generate_with_llm(improve_prompt, "You are a professional article editor. Polish, enrich, and expand content — never shrink or remove it.")
+        title, clean_content = await extract_title_and_content(enhanced_content)
         
         # First verify the content (which auto-replaces sensitive words if needed)
         yield send_progress("verifying", "正在验证文章质量...", 75)
@@ -820,6 +846,8 @@ Please merge the above text snippets into a complete, coherent article.
         
     except Exception as e:
         error_msg = str(e).replace('"', '\\"').replace('\n', ' ')
+        # Send error progress so the frontend status panel reflects the failure
+        yield send_progress("error", f"生成失败: {str(e)[:100]}", 0)
         yield f"event: error\ndata: {{\"message\": \"{error_msg}\"}}\n\n"
 
 
@@ -1009,7 +1037,6 @@ async def reset_sensitive_words():
 async def get_config():
     return {
         "min_article_length": MIN_ARTICLE_LENGTH,
-        "max_article_length": MAX_ARTICLE_LENGTH,
         "max_duplication_ratio": MAX_DUPLICATION_RATIO,
         "min_sentence_count": MIN_SENTENCE_COUNT,
         "available_styles": ["informative", "casual", "formal"]

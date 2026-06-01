@@ -53,7 +53,7 @@ REM Step 3: Build Docker image with BuildKit caching
 echo.
 echo [3/8] Building Docker image with BuildKit caching...
 set DOCKER_BUILDKIT=1
-docker build -t article-generator:!CURRENT_VERSION! --build-arg VERSION=!CURRENT_VERSION! .
+docker build --network=host -t article-generator:!CURRENT_VERSION! --build-arg VERSION=!CURRENT_VERSION! .
 
 if %ERRORLEVEL% neq 0 (
     echo.
@@ -75,8 +75,12 @@ for /f "tokens=*" %%i in ('docker images article-generator --format "{{.Tag}}" 2
     for /f "tokens=*" %%t in ("%%i") do set "TAG_CLEAN=%%t"
     if "!TAG_CLEAN!" neq "!CURRENT_VERSION_CLEAN!" (
         set "OLD_IMAGES_FOUND=true"
+        echo     - Removing containers using image: article-generator:!TAG_CLEAN!
+        for /f "tokens=*" %%c in ('docker ps -a --filter "ancestor=article-generator:!TAG_CLEAN!" --format "{{.Names}}" 2^>^&1') do (
+            docker rm -f %%c 2>&1
+        )
         echo     - Removing old image: article-generator:!TAG_CLEAN!
-        docker rmi article-generator:!TAG_CLEAN! 2>&1
+        docker rmi -f article-generator:!TAG_CLEAN! 2>&1
     )
 )
 if "!OLD_IMAGES_FOUND!" equ "false" (

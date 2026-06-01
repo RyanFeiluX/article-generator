@@ -1,16 +1,11 @@
 # syntax=docker/dockerfile:1.4
-FROM python:3.11-slim AS base
+# Use nikolaik/python-nodejs image which has both Python and Node.js pre-installed
+FROM nikolaik/python-nodejs:python3.11-nodejs20 AS base
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && npm install -g pnpm \
-    && rm -rf /var/lib/apt/lists/*
+# Install pnpm version compatible with Node.js 20
+RUN npm install -g --force pnpm@9.12.2
 
 FROM base AS backend-deps
 

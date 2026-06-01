@@ -205,7 +205,6 @@ Edit `backend/main.py` to modify verification thresholds:
 
 ```python
 MIN_ARTICLE_LENGTH = 500   # Minimum characters
-MAX_ARTICLE_LENGTH = 30000 # Maximum characters
 MAX_DUPLICATION_RATIO = 0.25 # Maximum duplication ratio
 MAX_RETRY_ATTEMPTS = 3      # Auto-retry attempts
 ```
