@@ -131,26 +131,11 @@ sleep 2
 
 # Step 6: Launch container
 echo "[6/7] Launching container..."
-if [ -n "$ARK_API_KEY" ]; then
-    echo "     - Using ARK_API_KEY from environment"
-    echo "     - Base URL: ${ARK_BASE_URL:-https://ark.cn-beijing.volces.com/api/v3}"
-    echo "     - Model: ${ARK_MODEL:-ep-20260413174919-nqclc}"
-    docker run -d \
-        --name article-generator \
-        -p ${PORT}:5000 \
-        -e PYTHONUNBUFFERED=1 \
-        -e ARK_API_KEY="$ARK_API_KEY" \
-        -e ARK_BASE_URL="${ARK_BASE_URL:-https://ark.cn-beijing.volces.com/api/v3}" \
-        -e ARK_MODEL="${ARK_MODEL:-ep-20260413174919-nqclc}" \
-        "${IMAGE_NAME}:${CURRENT_VERSION}"
-else
-    echo "     - Running in demo mode (set ARK_API_KEY to enable AI)"
-    docker run -d \
-        --name article-generator \
-        -p ${PORT}:5000 \
-        -e PYTHONUNBUFFERED=1 \
-        "${IMAGE_NAME}:${CURRENT_VERSION}"
-fi
+docker run -d \
+    --name article-generator \
+    -p ${PORT}:5000 \
+    -e PYTHONUNBUFFERED=1 \
+    "${IMAGE_NAME}:${CURRENT_VERSION}"
 
 if [ $? -ne 0 ]; then
     echo ""
@@ -169,15 +154,7 @@ echo ""
 echo "   Application:  http://localhost:${PORT}"
 echo "   Version:      ${CURRENT_VERSION}"
 echo ""
-if [ -n "$ARK_API_KEY" ]; then
-    echo -e "   API Key:      ${GREEN}ENV_VAR${NC} (Volc)"
-elif [ -n "$OPENAI_API_KEY" ]; then
-    echo -e "   API Key:      ${GREEN}ENV_VAR${NC} (OpenAI)"
-elif [ -n "$DEEPSEEK_API_KEY" ]; then
-    echo -e "   API Key:      ${GREEN}ENV_VAR${NC} (DeepSeek)"
-else
-    echo -e "   API Key:      ${BLUE}UI_CONFIG${NC} (configure via Settings)"
-fi
+echo -e "   API Key:      ${BLUE}Configure via Settings${NC}"
 echo ""
 echo "   To view logs:  docker logs -f article-generator"
 echo "   To stop:       docker stop article-generator && docker rm article-generator"

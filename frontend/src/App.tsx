@@ -20,7 +20,6 @@ function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Handle migration from old config format
         if (parsed.apiKey && !parsed.provider) {
           return {
             provider: 'volc',
@@ -41,6 +40,21 @@ function App() {
     }
     return defaultConfig;
   });
+
+  useEffect(() => {
+    const fetchDefaultConfig = async () => {
+      try {
+        const response = await fetch('/api/config');
+        const data = await response.json();
+        if (data.default_llm_config && !localStorage.getItem('llm-config')) {
+          setLlmConfig(data.default_llm_config);
+        }
+      } catch (error) {
+        console.error('Failed to fetch default config:', error);
+      }
+    };
+    fetchDefaultConfig();
+  }, []);
 
   const [showSensitiveWords, setShowSensitiveWords] = useState(false);
   const [showConfig, setShowConfig] = useState(false);

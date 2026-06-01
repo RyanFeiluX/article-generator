@@ -132,13 +132,7 @@ if "!FOUND!" equ "true" (
 set "CONTAINER_REMOVED=true"
 :skip_wait
 
-if defined ARK_API_KEY (
-    echo     - Using ARK_API_KEY from environment
-    docker run -d --name article-generator -p 5000:5000 -e PYTHONUNBUFFERED=1 -e ARK_API_KEY="!ARK_API_KEY!" -e ARK_BASE_URL="!ARK_BASE_URL!" -e ARK_MODEL="!ARK_MODEL!" article-generator:!CURRENT_VERSION! 2>nul
-) else (
-    echo     - Running in demo mode (set ARK_API_KEY to enable AI)
-    docker run -d --name article-generator -p 5000:5000 -e PYTHONUNBUFFERED=1 article-generator:!CURRENT_VERSION! 2>nul
-)
+docker run -d --name article-generator -p 5000:5000 -e PYTHONUNBUFFERED=1 article-generator:!CURRENT_VERSION! 2>nul
 
 set "CONTAINER_CREATED=false"
 for /f "tokens=*" %%i in ('docker ps -a --filter "name=article-generator" --format "{{.Names}}" 2^>^&1') do (
@@ -182,15 +176,7 @@ echo    Container:  article-generator
 echo    Version:    v!CURRENT_VERSION!
 echo    URL:        http://localhost:5000
 echo.
-if defined ARK_API_KEY (
-    echo    API Key:    ENV_VAR ^(Volc^)
-) else if defined OPENAI_API_KEY (
-    echo    API Key:    ENV_VAR ^(OpenAI^)
-) else if defined DEEPSEEK_API_KEY (
-    echo    API Key:    ENV_VAR ^(DeepSeek^)
-) else (
-    echo    API Key:    UI_CONFIG ^(configure via Settings^)
-)
+echo    API Key:    Configure via Settings
 echo.
 echo ===========================================
 echo.

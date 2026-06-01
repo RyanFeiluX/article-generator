@@ -1312,11 +1312,21 @@ async def reset_sensitive_words():
 
 @app.get("/api/config")
 async def get_config():
+    default_llm_config = {}
+    default_config_path = os.path.join(CONFIG_DIR, "default_config.json")
+    if os.path.exists(default_config_path):
+        try:
+            with open(default_config_path, "r", encoding="utf-8") as f:
+                default_llm_config = json.load(f)
+        except Exception as e:
+            print(f"[CONFIG] Error loading default config: {e}", flush=True)
+    
     return {
         "min_article_length": MIN_ARTICLE_LENGTH,
         "max_duplication_ratio": MAX_DUPLICATION_RATIO,
         "min_sentence_count": MIN_SENTENCE_COUNT,
-        "available_styles": ["informative", "casual", "formal"]
+        "available_styles": ["informative", "casual", "formal"],
+        "default_llm_config": default_llm_config
     }
 
 
