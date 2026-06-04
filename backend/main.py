@@ -978,7 +978,7 @@ async def simulate_llm_response(prompt: str, error_detail: str = None) -> str:
 
 async def extract_title_and_content(text: str) -> tuple:
     title_match = re.search(r'\[Title\]\s*(.+?)(?:\n\[Content\]|$)', text, re.IGNORECASE | re.DOTALL)
-    content_match = re.search(r'\[Content\]\s*(.+?)(?:\n\n|\Z)', text, re.IGNORECASE | re.DOTALL)
+    content_match = re.search(r'\[Content\]\s*(.*)', text, re.IGNORECASE | re.DOTALL)
     
     title = title_match.group(1).strip() if title_match else ""
     content = content_match.group(1).strip() if content_match else text.strip()
@@ -1106,25 +1106,11 @@ Improved Chinese content here."""
         yield send_progress("verifying", "正在验证文章质量...", 75)
         verification = verify_content_internal(clean_content)
         
-        # Use modified content if sensitive words were auto-replaced
-        final_content = verification.get('modified_content') or clean_content
-        
-        # Stream the final content (with auto-replacements if any)
-        yield send_progress("generating", "正在处理内容...", 80)
-        for i in range(0, len(final_content), 100):
-            chunk = final_content[i:i+100]
-            content_escaped = chunk.replace("\n", "<br>").replace('"', '\\"')
-            yield f"event: content\ndata: {content_escaped}\n\n"
-            await asyncio.sleep(0.05)  # Small delay for streaming effect
-        
-        # Step 3: Internal verification - continue checking other aspects
-        yield send_progress("verifying", "正在检查文章完整性...", 85)
-        
         # Step 4: Auto-improve if other verification checks fail
         retry_count = 0
         while not verification['passed'] and retry_count < MAX_RETRY_ATTEMPTS:
             retry_count += 1
-            yield send_progress("improving", f"正在优化文章 (第 {retry_count}/{MAX_RETRY_ATTEMPTS} 次)...", 85 + retry_count * 3)
+            yield send_progress("improving", f"正在优化文章 (第 {retry_count}/{MAX_RETRY_ATTEMPTS} 次)...", 75 + retry_count * 5)
             
             improved = await improve_article(clean_content, verification['issues'], style, llm_config)
             title, clean_content = await extract_title_and_content(improved)
@@ -1134,14 +1120,13 @@ Improved Chinese content here."""
         # Use modified content if sensitive words were auto-replaced
         final_content = verification.get('modified_content') or clean_content
         
-        # Stream the final content (with auto-replacements if any)
-        if final_content != clean_content:
-            yield send_progress("generating", "正在替换敏感词...", 75)
-            for i in range(0, len(final_content), 100):
-                chunk = final_content[i:i+100]
-                content_escaped = chunk.replace("\n", "<br>").replace('"', '\\"')
-                yield f"event: content\ndata: {content_escaped}\n\n"
-                await asyncio.sleep(0.05)
+        # Stream the final content once, after all processing is done
+        yield send_progress("generating", "正在输出文章...", 90)
+        for i in range(0, len(final_content), 100):
+            chunk = final_content[i:i+100]
+            content_escaped = chunk.replace("\n", "<br>").replace('"', '\\"')
+            yield f"event: content\ndata: {content_escaped}\n\n"
+            await asyncio.sleep(0.05)  # Small delay for streaming effect
         
         yield send_progress("complete", "文章已就绪!", 100)
         title_escaped = title.replace('"', '\\"').replace('\n', ' ')
