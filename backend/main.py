@@ -164,6 +164,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -382,6 +383,14 @@ class AnthropicConfig(BaseModel):
     temperature: Optional[float] = None
     maxTokens: Optional[int] = None
 
+class DeepSeekConfig(BaseModel):
+    apiKey: Optional[str] = None
+    baseUrl: Optional[str] = None
+    model: Optional[str] = None
+    temperature: Optional[float] = None
+    maxTokens: Optional[int] = None
+    topP: Optional[float] = None
+
 class CustomConfig(BaseModel):
     apiKey: Optional[str] = None
     baseUrl: Optional[str] = None
@@ -393,7 +402,7 @@ class CustomConfig(BaseModel):
 # Unified LLM Config
 class LLMConfig(BaseModel):
     provider: str = "volc"
-    config: Optional[VolcConfig | OpenAIConfig | AzureConfig | AnthropicConfig | CustomConfig] = None
+    config: Optional[VolcConfig | OpenAIConfig | AzureConfig | AnthropicConfig | DeepSeekConfig | CustomConfig] = None
 
 
 # LLM Provider Interface and Implementations
@@ -604,16 +613,28 @@ class AnthropicProvider(LLMProvider):
 class DeepSeekProvider(LLMProvider):
     async def generate(self, prompt: str, system_prompt: str, config: dict) -> str:
         api_key = config.get("apiKey")
-        base_url = config.get("baseUrl", "https://api.deepseek.com/v1/chat/completions")
+        base_url = config.get("baseUrl", "https://api.deepseek.com/v1")
         model = config.get("model", "deepseek-v4-flash")
         temperature = config.get("temperature", 0.7)
         max_tokens = config.get("maxTokens", 4096)
         top_p = config.get("topP", 0.95)
 
+        print(f"[LLM] DeepSeek config received: {config}", flush=True)
+        print(f"[LLM] DeepSeek api_key set: {bool(api_key)}", flush=True)
+        
         if not api_key:
+            print(f"[LLM] DeepSeek no API key, returning simulated response", flush=True)
             return await simulate_llm_response(prompt, error_detail="⚠️ 请在配置页面设置 DeepSeek API Key")
         
         print(f"[LLM] Using DeepSeek: model={model}", flush=True)
+        
+        # Fix base URL to ensure it's correct
+        if base_url and not base_url.endswith("/chat/completions") and not base_url.endswith("/v1"):
+            if not base_url.endswith("/"):
+                base_url += "/"
+            base_url += "chat/completions"
+        elif base_url and base_url.endswith("/v1"):
+            base_url += "/chat/completions"
         
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -633,6 +654,7 @@ class DeepSeekProvider(LLMProvider):
         
         try:
             async with httpx.AsyncClient(timeout=300.0) as client:
+                print(f"[LLM] DeepSeek request URL: {base_url}", flush=True)
                 response = await client.post(base_url, headers=headers, json=payload)
                 response.raise_for_status()
                 result = response.json()
@@ -907,6 +929,8 @@ async def generate_with_llm(prompt: str, system_prompt: str, llm_config: Optiona
     config_dict = llm_config.config.model_dump() if (llm_config and llm_config.config) else {}
     
     print(f"[LLM] Using provider: {provider_type}", flush=True)
+    print(f"[LLM] llm_config object: {llm_config}", flush=True)
+    print(f"[LLM] config_dict: {config_dict}", flush=True)
     
     # Get provider from factory
     provider = LLMProviderFactory.get_provider(provider_type)
@@ -962,7 +986,7 @@ async def extract_title_and_content(text: str) -> tuple:
     return title, content
 
 
-async def improve_article(current_content: str, issues: List[str], style: str) -> str:
+async def improve_article(current_content: str, issues: List[str], style: str, llm_config: Optional[LLMConfig] = None) -> str:
     issues_text = "\n".join([f"- {issue}" for issue in issues])
     
     improvement_prompt = f"""## Task: Improve Article Quality (EXPANSION ONLY — No Shrinking)
@@ -988,7 +1012,8 @@ Please improve the following article to address the identified issues. CRITICAL:
 
 Provide the improved article with the same [Title] and [Content] format."""
 
-    return await generate_with_llm(improvement_prompt, "You are a professional article editor who fixes issues by enriching and expanding content — never by shrinking or removing it.")
+    print(f"[LLM] Calling generate_with_llm for improvement retry with provider: {llm_config.provider if llm_config else 'volc'}", flush=True)
+    return await generate_with_llm(improvement_prompt, "You are a professional article editor who fixes issues by enriching and expanding content — never by shrinking or removing it.", llm_config)
 
 
 async def generate_article_stream(
@@ -1045,7 +1070,8 @@ Chinese Title
 [Content]
 Chinese content here."""
 
-        full_content = await generate_with_llm(combine_prompt, "You are an expert article writer who expands brief content into comprehensive articles. Never summarize — always build upon and enrich input.")
+        print(f"[LLM] Calling generate_with_llm with provider: {llm_config.provider if llm_config else 'volc'}", flush=True)
+        full_content = await generate_with_llm(combine_prompt, "You are an expert article writer who expands brief content into comprehensive articles. Never summarize — always build upon and enrich input.", llm_config)
         
         title, clean_content = await extract_title_and_content(full_content)
         
@@ -1072,7 +1098,8 @@ Chinese Title
 [Content]
 Improved Chinese content here."""
 
-        enhanced_content = await generate_with_llm(improve_prompt, "You are a professional article editor. Polish, enrich, and expand content — never shrink or remove it.")
+        print(f"[LLM] Calling generate_with_llm for improvement with provider: {llm_config.provider if llm_config else 'volc'}", flush=True)
+        enhanced_content = await generate_with_llm(improve_prompt, "You are a professional article editor. Polish, enrich, and expand content — never shrink or remove it.", llm_config)
         title, clean_content = await extract_title_and_content(enhanced_content)
         
         # First verify the content (which auto-replaces sensitive words if needed)
@@ -1099,7 +1126,7 @@ Improved Chinese content here."""
             retry_count += 1
             yield send_progress("improving", f"正在优化文章 (第 {retry_count}/{MAX_RETRY_ATTEMPTS} 次)...", 85 + retry_count * 3)
             
-            improved = await improve_article(clean_content, verification['issues'], style)
+            improved = await improve_article(clean_content, verification['issues'], style, llm_config)
             title, clean_content = await extract_title_and_content(improved)
             
             verification = verify_content_internal(clean_content)

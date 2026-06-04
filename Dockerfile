@@ -56,4 +56,4 @@ COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
 
 EXPOSE 5000
 
-CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "5000"]
+CMD ["python", "backend/entrypoint.py"]
