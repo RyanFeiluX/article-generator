@@ -977,11 +977,23 @@ async def simulate_llm_response(prompt: str, error_detail: str = None) -> str:
 
 
 async def extract_title_and_content(text: str) -> tuple:
-    title_match = re.search(r'\[Title\]\s*(.+?)(?:\n\[Content\]|$)', text, re.IGNORECASE | re.DOTALL)
-    content_match = re.search(r'\[Content\]\s*(.*)', text, re.IGNORECASE | re.DOTALL)
+    # Strip any preamble text before [Title] as safety net
+    title_idx = text.find('[Title]')
+    content_idx = text.find('[Content]')
+    
+    clean_text = text
+    if title_idx >= 0:
+        # Strip everything before [Title] (when [Title] is at position 0, this is a no-op)
+        clean_text = text[title_idx:]
+    elif content_idx >= 0:
+        # No [Title] but [Content] exists — strip everything before [Content]
+        clean_text = text[content_idx:]
+    
+    title_match = re.search(r'\[Title\]\s*(.+?)(?:\n\[Content\]|$)', clean_text, re.IGNORECASE | re.DOTALL)
+    content_match = re.search(r'\[Content\]\s*(.*)', clean_text, re.IGNORECASE | re.DOTALL)
     
     title = title_match.group(1).strip() if title_match else ""
-    content = content_match.group(1).strip() if content_match else text.strip()
+    content = content_match.group(1).strip() if content_match else clean_text.strip()
     
     return title, content
 
@@ -1010,7 +1022,7 @@ Please improve the following article to address the identified issues. CRITICAL:
 8. **Ensure Fluency**: Use natural, fluent Chinese expression
 9. **Chinese Only**: Entire article must be in Chinese
 
-Provide the improved article with the same [Title] and [Content] format."""
+Provide the improved article with the same [Title] and [Content] format. Start DIRECTLY with `[Title]` — no preamble, no explanations, no conversational text."""
 
     print(f"[LLM] Calling generate_with_llm for improvement retry with provider: {llm_config.provider if llm_config else 'volc'}", flush=True)
     return await generate_with_llm(improvement_prompt, "You are a professional article editor who fixes issues by enriching and expanding content — never by shrinking or removing it.", llm_config)
@@ -1063,6 +1075,8 @@ async def generate_article_stream(
 6. **Engaging title**: 10-20 Chinese characters reflecting the full scope.
 7. **Chinese only**.
 
+**CRITICAL — Output format**: Start your response DIRECTLY with `[Title]`. No preamble, no conversational text, no greetings, no acknowledgments, no explanations of what you did. Just the pure formatted article.
+
 Output Format:
 [Title]
 Chinese Title
@@ -1078,8 +1092,11 @@ Chinese content here."""
         # Step 3: Single comprehensive improvement pass to enhance quality
         yield send_progress("improving", "正在优化文章质量...", 40)
         
+        # Use clean extracted content (not raw LLM output) to avoid feeding preamble back
+        clean_article = f"[Title]\n{title}\n\n[Content]\n{clean_content}"
+        
         improve_prompt = f"""## Article to Improve:
-{full_content}
+{clean_article}
 
 ## Target: Produce a polished article of at least {target_len} characters. Never shorten — only enhance and expand.
 
@@ -1090,6 +1107,8 @@ Chinese content here."""
 4. **Structure**: Ensure clear introduction, well-developed body paragraphs, and a meaningful conclusion.
 5. **Professional tone**: Use precise, professional language in {style} style.
 6. **Chinese only**.
+
+**CRITICAL — Output format**: Start your response DIRECTLY with `[Title]`. No preamble, no conversational text, no greetings — just the pure article.
 
 Output Format:
 [Title]
