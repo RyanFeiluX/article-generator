@@ -422,7 +422,7 @@ class VolcProvider(LLMProvider):
         top_p = config.get("topP") or 0.95
 
         if not api_key:
-            return await simulate_llm_response(prompt, error_detail="⚠️ 未设置 ARK_API_KEY 环境变量，请在服务端或前端配置页面设置。")
+            return await simulate_llm_response(prompt, error_detail="⚠️ Volc Engine ARK 未配置 API Key，请在前端配置页面设置。")
         
         # Fix base URL to ensure it's correct
         if base_url and not base_url.endswith("/chat/completions") and not base_url.endswith("/v1"):
@@ -486,7 +486,7 @@ class OpenAIProvider(LLMProvider):
         top_p = config.get("topP", 0.95)
 
         if not api_key:
-            return await simulate_llm_response(prompt, error_detail="⚠️ 请在配置页面设置 OpenAI API Key")
+            return await simulate_llm_response(prompt, error_detail="⚠️ OpenAI 未配置 API Key，请在前端配置页面设置。")
         
         print(f"[LLM] Using OpenAI: model={model}", flush=True)
         
@@ -534,7 +534,7 @@ class AzureProvider(LLMProvider):
         max_tokens = config.get("maxTokens", 4096)
 
         if not api_key or not endpoint or not deployment_name:
-            return await simulate_llm_response(prompt, error_detail="⚠️ 请在配置页面完整填写 Azure OpenAI 配置")
+            return await simulate_llm_response(prompt, error_detail="⚠️ Azure OpenAI 配置不完整，请在前端配置页面填写 API Key、Endpoint 和 Deployment Name。")
         
         url = f"{endpoint}/openai/deployments/{deployment_name}/chat/completions?api-version={api_version}"
         print(f"[LLM] Using Azure OpenAI: deployment={deployment_name}", flush=True)
@@ -576,7 +576,7 @@ class AnthropicProvider(LLMProvider):
         max_tokens = config.get("maxTokens", 4096)
 
         if not api_key:
-            return await simulate_llm_response(prompt, error_detail="⚠️ 请在配置页面设置 Anthropic API Key")
+            return await simulate_llm_response(prompt, error_detail="⚠️ Anthropic 未配置 API Key，请在前端配置页面设置。")
         
         print(f"[LLM] Using Anthropic: model={model}", flush=True)
         
@@ -624,7 +624,7 @@ class DeepSeekProvider(LLMProvider):
         
         if not api_key:
             print(f"[LLM] DeepSeek no API key, returning simulated response", flush=True)
-            return await simulate_llm_response(prompt, error_detail="⚠️ 请在配置页面设置 DeepSeek API Key")
+            return await simulate_llm_response(prompt, error_detail="⚠️ DeepSeek 未配置 API Key，请在前端配置页面设置。")
         
         print(f"[LLM] Using DeepSeek: model={model}", flush=True)
         
@@ -677,7 +677,7 @@ class CustomProvider(LLMProvider):
         top_p = config.get("topP", 0.95)
 
         if not api_key or not base_url or not model:
-            return await simulate_llm_response(prompt, error_detail="⚠️ 请在配置页面完整填写 Custom API 配置")
+            return await simulate_llm_response(prompt, error_detail="⚠️ Custom API 配置不完整，请在前端配置页面填写 API Key、Base URL 和 Model。")
         
         print(f"[LLM] Using Custom API: base={base_url}, model={model}", flush=True)
         
@@ -925,6 +925,11 @@ async def generate_with_llm(prompt: str, system_prompt: str, llm_config: Optiona
     llm_config: Optional LLM configuration with provider and settings
     """
     # Determine provider and config
+    if llm_config:
+        print(f"[LLM] llm_config is not None", flush=True)
+        print(f"[LLM] llm_config.provider type: {type(llm_config.provider)}", flush=True)
+        print(f"[LLM] llm_config.provider value: '{llm_config.provider}'", flush=True)
+    
     provider_type = llm_config.provider if llm_config and llm_config.provider else "volc"
     config_dict = llm_config.config.model_dump() if (llm_config and llm_config.config) else {}
     
@@ -1179,6 +1184,12 @@ async def health_check():
 async def generate_article(request: ArticleRequest):
     import sys
     print(f"[DEBUG] Received request: snippets={len(request.snippets)}, topic={request.topic}, style={request.style}", flush=True)
+    print(f"[DEBUG] llm_config received: {request.llm_config}", flush=True)
+    if request.llm_config:
+        print(f"[DEBUG] Provider from request: {request.llm_config.provider}", flush=True)
+        print(f"[DEBUG] Config: {request.llm_config.config}", flush=True)
+    else:
+        print(f"[DEBUG] No llm_config received in request", flush=True)
     if not request.snippets:
         raise HTTPException(status_code=400, detail="At least one snippet is required")
     

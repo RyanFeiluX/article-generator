@@ -184,6 +184,9 @@ export function useArticleGenerator({ llmConfig }: UseArticleGeneratorProps): Us
       llm_config: llmConfig
     };
 
+    console.log('[DEBUG] llmConfig passed to hook:', llmConfig);
+    console.log('[DEBUG] llmConfig.provider:', llmConfig?.provider);
+    console.log('[DEBUG] llmConfig.config:', llmConfig?.config);
     console.log('[DEBUG] Sending request:', JSON.stringify(request, null, 2));
 
     try {

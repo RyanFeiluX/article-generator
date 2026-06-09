@@ -28,7 +28,7 @@ export const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
   };
 
   const exportAsTxt = () => {
-    let textToExport = `Title: ${title || 'Untitled Article'}\n${'='.repeat(50)}\n\n${content}`;
+    let textToExport = `Title: ${title || 'Untitled Article'}\n${'='.repeat(50)}\n\n${cleanContent}`;
     if (sources.length > 0) {
       textToExport += '\n\n' + '='.repeat(50) + '\nSources:\n';
       sources.forEach((s, i) => {
@@ -39,7 +39,7 @@ export const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
   };
 
   const exportAsMd = () => {
-    let mdContent = `# ${title || 'Untitled Article'}\n\n${content}\n\n---\n`;
+    let mdContent = `# ${title || 'Untitled Article'}\n\n${cleanContent}\n\n---\n`;
     if (sources.length > 0) {
       mdContent += '\n## Sources\n\n';
       sources.forEach((s, i) => {
@@ -70,7 +70,7 @@ export const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
 </head>
 <body>
   <h1>${title || 'Untitled Article'}</h1>
-  <div class="content">${content.replace(/\n/g, '<br>')}</div>
+  <div class="content">${cleanContent.replace(/\n/g, '<br>')}</div>
   ${sources.length > 0 ? `
   <div class="sources">
     <h2>Sources</h2>
