@@ -982,23 +982,49 @@ async def simulate_llm_response(prompt: str, error_detail: str = None) -> str:
 
 
 async def extract_title_and_content(text: str) -> tuple:
-    # Strip any preamble text before [Title] as safety net
     title_idx = text.find('[Title]')
     content_idx = text.find('[Content]')
     
     clean_text = text
     if title_idx >= 0:
-        # Strip everything before [Title] (when [Title] is at position 0, this is a no-op)
         clean_text = text[title_idx:]
     elif content_idx >= 0:
-        # No [Title] but [Content] exists — strip everything before [Content]
         clean_text = text[content_idx:]
     
-    title_match = re.search(r'\[Title\]\s*(.+?)(?:\n\[Content\]|$)', clean_text, re.IGNORECASE | re.DOTALL)
+    title_match = re.search(r'\[Title\]\s*(.+?)(?:\n|\[Content\]|$)', clean_text, re.IGNORECASE)
     content_match = re.search(r'\[Content\]\s*(.*)', clean_text, re.IGNORECASE | re.DOTALL)
     
     title = title_match.group(1).strip() if title_match else ""
-    content = content_match.group(1).strip() if content_match else clean_text.strip()
+    title = re.sub(r'^#{1,6}\s*', '', title)
+    # Safeguard: if title is excessively long (>100 chars), it likely captured content.
+    # Truncate at the first sentence boundary.
+    if len(title) > 100:
+        sentence_end = re.search(r'[.!?。！？]', title)
+        if sentence_end and sentence_end.start() < 100:
+            title = title[:sentence_end.start() + 1].strip()
+        else:
+            title = title[:100].strip()
+    
+    if content_match:
+        content = content_match.group(1).strip()
+    else:
+        content = clean_text.strip()
+    
+    if title:
+        content = re.sub(r'^\s*#{1,6}\s*' + re.escape(title) + r'\s*\n?', '', content, flags=re.IGNORECASE)
+    
+    content = re.sub(r'^\s*#{1,6}\s*' + re.escape(title) + r'\s*\n?', '', content, flags=re.IGNORECASE)
+    
+    sentences = re.split(r'[.!?。！？]+', content)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    unique_sentences = []
+    seen = set()
+    for sentence in sentences:
+        sentence_normalized = sentence.lower().replace(' ', '').replace('\t', '')
+        if sentence_normalized and sentence_normalized not in seen:
+            seen.add(sentence_normalized)
+            unique_sentences.append(sentence)
+    content = '。'.join(unique_sentences)
     
     return title, content
 
@@ -1027,7 +1053,18 @@ Please improve the following article to address the identified issues. CRITICAL:
 8. **Ensure Fluency**: Use natural, fluent Chinese expression
 9. **Chinese Only**: Entire article must be in Chinese
 
-Provide the improved article with the same [Title] and [Content] format. Start DIRECTLY with `[Title]` — no preamble, no explanations, no conversational text."""
+## CRITICAL — Strict Output Format:
+- Start DIRECTLY with `[Title]` — no preamble, no explanations, no conversational text.
+- `[Title]` must contain ONLY a short title (10-20 Chinese characters) on ONE line.
+- `[Content]` MUST appear on a new line after the title.
+- Never put article body text inside the [Title] line.
+
+Output Format (follow EXACTLY):
+[Title]
+Chinese Title (10-20 characters, single line)
+
+[Content]
+Improved Chinese content here."""
 
     print(f"[LLM] Calling generate_with_llm for improvement retry with provider: {llm_config.provider if llm_config else 'volc'}", flush=True)
     return await generate_with_llm(improvement_prompt, "You are a professional article editor who fixes issues by enriching and expanding content — never by shrinking or removing it.", llm_config)
@@ -1080,14 +1117,18 @@ async def generate_article_stream(
 6. **Engaging title**: 10-20 Chinese characters reflecting the full scope.
 7. **Chinese only**.
 
-**CRITICAL — Output format**: Start your response DIRECTLY with `[Title]`. No preamble, no conversational text, no greetings, no acknowledgments, no explanations of what you did. Just the pure formatted article.
+## CRITICAL — Strict Output Format:
+- Start DIRECTLY with `[Title]` — no preamble, no conversational text, no greetings, no acknowledgments.
+- `[Title]` must contain ONLY a short title (10-20 Chinese characters) on ONE line.
+- `[Content]` MUST appear on a new line after the title.
+- Never put article body text inside the [Title] line.
 
-Output Format:
+Output Format (follow EXACTLY):
 [Title]
-Chinese Title
+Chinese Title (10-20 characters, single line)
 
 [Content]
-Chinese content here."""
+Chinese article content here."""
 
         print(f"[LLM] Calling generate_with_llm with provider: {llm_config.provider if llm_config else 'volc'}", flush=True)
         full_content = await generate_with_llm(combine_prompt, "You are an expert article writer who expands brief content into comprehensive articles. Never summarize — always build upon and enrich input.", llm_config)
@@ -1113,11 +1154,15 @@ Chinese content here."""
 5. **Professional tone**: Use precise, professional language in {style} style.
 6. **Chinese only**.
 
-**CRITICAL — Output format**: Start your response DIRECTLY with `[Title]`. No preamble, no conversational text, no greetings — just the pure article.
+## CRITICAL — Strict Output Format:
+- Start DIRECTLY with `[Title]` — no preamble, no conversational text, no greetings.
+- `[Title]` must contain ONLY a short title (10-20 Chinese characters) on ONE line.
+- `[Content]` MUST appear on a new line after the title.
+- Never put article body text inside the [Title] line.
 
-Output Format:
+Output Format (follow EXACTLY):
 [Title]
-Chinese Title
+Chinese Title (10-20 characters, single line)
 
 [Content]
 Improved Chinese content here."""

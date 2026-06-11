@@ -39,7 +39,7 @@ export const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
   };
 
   const exportAsMd = () => {
-    let mdContent = `# ${title || 'Untitled Article'}\n\n${cleanContent}\n\n---\n`;
+    let mdContent = `# ${title || 'Untitled Article'}\n\n${cleanContent}\n`;
     if (sources.length > 0) {
       mdContent += '\n## Sources\n\n';
       sources.forEach((s, i) => {
@@ -111,7 +111,10 @@ export const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
   };
 
   // Clean content by removing [Title] and [Content] markers
-  const cleanContent = content.replace(/\[Title\]\s*.*?\n*\[Content\]\s*/gi, '');
+  const cleanContent = content
+    .replace(/\[Title\]\s*[\s\S]*?(?=\[Content\]|\n\n|$)/gi, '')
+    .replace(/\[Content\]\s*/gi, '')
+    .trim();
   
   // Count both English words and Chinese characters
   const countContent = (text: string) => {

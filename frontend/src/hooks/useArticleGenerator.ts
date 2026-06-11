@@ -250,10 +250,16 @@ export function useArticleGenerator({ llmConfig }: UseArticleGeneratorProps): Us
 
       // Use buffered content if no title was set
       if (!generatedTitle && contentBufferRef.current) {
-        // Try to extract title from content
-        const titleMatch = contentBufferRef.current.match(/\[Title\]\s*(.+?)(?:\n\[Content\]|$)/i);
+        // Try [Title]...[Content] pattern first
+        const titleMatch = contentBufferRef.current.match(/\[Title\]\s*([\s\S]+?)(?:\n\s*\[Content\])/i);
         if (titleMatch) {
-          setGeneratedTitle(titleMatch[1].trim());
+          setGeneratedTitle(titleMatch[1].trim().split('\n')[0].trim());
+        } else {
+          // Fallback: try [Title] followed by text until double newline or end
+          const fallbackMatch = contentBufferRef.current.match(/\[Title\]\s*(.+?)(?:\n\n|$)/i);
+          if (fallbackMatch) {
+            setGeneratedTitle(fallbackMatch[1].trim());
+          }
         }
       }
 
