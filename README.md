@@ -48,6 +48,15 @@ Three writing styles are available, each shaping the tone and language of the ge
 
 The selected style is applied throughout both the initial generation and any automatic improvement passes.
 
+## Input Limits
+
+| Constraint | Value |
+|------------|-------|
+| Text snippets per request | 1 – 20 |
+| Characters per snippet | 1 – 100,000 |
+| Minimum generated article length | 3,000 characters or 2× total input length (whichever is larger) |
+| Auto-improvement retries | Up to 3 attempts on verification failure |
+
 ## Documentation
 
 See [docs/INSTALL.md](docs/INSTALL.md) for detailed installation guide.

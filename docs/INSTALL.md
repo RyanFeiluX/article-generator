@@ -8,7 +8,7 @@ A full-stack application for generating AI-powered articles from text snippets w
 - **AI Article Generation**: Generate comprehensive articles using Volc Engine ARK LLM
 - **Web Search Supplement**: Automatically supplement content with online search results
 - **Internal Content Verification** (Invisible to Frontend):
-  - Size validation (500-30,000 characters)
+  - Size validation (minimum 3,000 characters or 2× input length, whichever is larger)
   - Anti-duplication check (n-gram similarity analysis)
   - Conflict detection (contradictory statements)
   - Logical flow verification (intro, transitions, conclusion)
@@ -189,7 +189,7 @@ The application monitors for inappropriate content in these categories:
 
 The backend automatically verifies articles with these checks:
 
-1. **Size Check**: Ensures 500-30,000 characters
+1. **Size Check**: Ensures at least 3,000 characters or 2× total input length (whichever is larger)
 2. **Duplication Check**: N-gram similarity analysis (max 25%)
 3. **Conflict Check**: Detects contradictory statements
 4. **Logical Flow**: Checks for intro, transitions, conclusion
@@ -204,7 +204,7 @@ If verification fails, the system will automatically retry up to 3 times with im
 Edit `backend/main.py` to modify verification thresholds:
 
 ```python
-MIN_ARTICLE_LENGTH = 500   # Minimum characters
+MIN_ARTICLE_LENGTH = 3000  # Minimum characters
 MAX_DUPLICATION_RATIO = 0.25 # Maximum duplication ratio
 MAX_RETRY_ATTEMPTS = 3      # Auto-retry attempts
 ```
