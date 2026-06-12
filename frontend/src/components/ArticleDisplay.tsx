@@ -202,9 +202,11 @@ export const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
           )}
           
           <div className="prose max-w-none">
-            <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
-              {cleanContent}
-            </div>
+            {cleanContent.split(/\n\s*\n/).map((paragraph, idx) => (
+              <p key={idx} className="text-gray-700 leading-relaxed mb-4 last:mb-0">
+                {paragraph}
+              </p>
+            ))}
           </div>
           
           <div className="flex items-center justify-between pt-3 border-t border-gray-200">

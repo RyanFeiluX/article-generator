@@ -1015,16 +1015,40 @@ async def extract_title_and_content(text: str) -> tuple:
     
     content = re.sub(r'^\s*#{1,6}\s*' + re.escape(title) + r'\s*\n?', '', content, flags=re.IGNORECASE)
     
-    sentences = re.split(r'[.!?。！？]+', content)
-    sentences = [s.strip() for s in sentences if s.strip()]
-    unique_sentences = []
-    seen = set()
-    for sentence in sentences:
-        sentence_normalized = sentence.lower().replace(' ', '').replace('\t', '')
-        if sentence_normalized and sentence_normalized not in seen:
-            seen.add(sentence_normalized)
-            unique_sentences.append(sentence)
-    content = '。'.join(unique_sentences)
+    # Paragraph-aware deduplication: preserve paragraph structure while removing duplicate sentences
+    paragraphs = re.split(r'\n\s*\n', content)
+    unique_paragraphs = []
+    seen_sentences = set()
+
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+
+        # Deduplicate sentences within this paragraph, preserving punctuation
+        sentences = re.split(r'([.!?。！？]+)', para)
+        unique_in_para = []
+        for i in range(0, len(sentences) - 1, 2):
+            sentence = sentences[i].strip()
+            punctuation = sentences[i + 1] if i + 1 < len(sentences) else ''
+            if not sentence:
+                continue
+            sentence_normalized = sentence.lower().replace(' ', '').replace('\t', '')
+            if sentence_normalized and sentence_normalized not in seen_sentences:
+                seen_sentences.add(sentence_normalized)
+                unique_in_para.append(sentence + punctuation)
+        # Handle trailing text without punctuation
+        if len(sentences) % 2 == 1 and sentences[-1].strip():
+            trailing = sentences[-1].strip()
+            trailing_norm = trailing.lower().replace(' ', '').replace('\t', '')
+            if trailing_norm not in seen_sentences:
+                seen_sentences.add(trailing_norm)
+                unique_in_para.append(trailing)
+
+        if unique_in_para:
+            unique_paragraphs.append(''.join(unique_in_para))
+
+    content = '\n\n'.join(unique_paragraphs)
     
     return title, content
 
