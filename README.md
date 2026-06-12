@@ -34,6 +34,18 @@ Access at http://localhost:3000
 - Export (TXT, MD, HTML) & Copy
 - **Single-click "Clear All"**
 
+## Article Types
+
+Three writing styles are available, each shaping the tone and language of the generated article:
+
+| Style | Description |
+|-------|-------------|
+| **Informative** (default) | Balanced, professional tone with clear explanations and factual presentation. Suitable for general-purpose articles and explainers. |
+| **Casual** | Relaxed, conversational tone with approachable language. Suitable for blog posts, lifestyle pieces, and reader-friendly content. |
+| **Formal** | Precise, polished, and authoritative tone. Suitable for reports, white papers, and professional publications. |
+
+The selected style is applied throughout both the initial generation and any automatic improvement passes.
+
 ## Documentation
 
 See [docs/INSTALL.md](docs/INSTALL.md) for detailed installation guide.
