@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { SearchSource } from '../types';
 
 interface ArticleDisplayProps {
@@ -12,6 +13,7 @@ export const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
   content,
   sources = []
 }) => {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [exportFormat, setExportFormat] = useState<'txt' | 'md' | 'html'>('txt');
   const [showSources, setShowSources] = useState(false);
@@ -28,9 +30,9 @@ export const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
   };
 
   const exportAsTxt = () => {
-    let textToExport = `Title: ${title || 'Untitled Article'}\n${'='.repeat(50)}\n\n${cleanContent}`;
+    let textToExport = `Title: ${title || t('article.untitled')}\n${'='.repeat(50)}\n\n${cleanContent}`;
     if (sources.length > 0) {
-      textToExport += '\n\n' + '='.repeat(50) + '\nSources:\n';
+      textToExport += '\n\n' + '='.repeat(50) + `\n${t('article.sources')}:\n`;
       sources.forEach((s, i) => {
         textToExport += `\n${i + 1}. ${s.title}\n   URL: ${s.url}\n`;
       });
@@ -39,9 +41,9 @@ export const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
   };
 
   const exportAsMd = () => {
-    let mdContent = `# ${title || 'Untitled Article'}\n\n${cleanContent}\n`;
+    let mdContent = `# ${title || t('article.untitled')}\n\n${cleanContent}\n`;
     if (sources.length > 0) {
-      mdContent += '\n## Sources\n\n';
+      mdContent += `\n## ${t('article.sources')}\n\n`;
       sources.forEach((s, i) => {
         mdContent += `${i + 1}. [${s.title}](${s.url})\n`;
       });
@@ -56,7 +58,7 @@ export const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title || 'Untitled Article'}</title>
+  <title>${title || t('article.untitled')}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 2rem; line-height: 1.6; color: #333; }
     h1 { color: #1a1a1a; margin-bottom: 1rem; }
@@ -69,11 +71,11 @@ export const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
   </style>
 </head>
 <body>
-  <h1>${title || 'Untitled Article'}</h1>
+  <h1>${title || t('article.untitled')}</h1>
   <div class="content">${cleanContent.replace(/\n/g, '<br>')}</div>
   ${sources.length > 0 ? `
   <div class="sources">
-    <h2>Sources</h2>
+    <h2>${t('article.sources')}</h2>
     ${sources.map((s, i) => `<div class="source">${i + 1}. <a href="${s.url}">${s.title}</a></div>`).join('')}
   </div>
   ` : ''}
@@ -143,7 +145,7 @@ export const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4">
       <div className="flex justify-between items-start mb-4">
-        <h3 className="text-lg font-medium text-gray-900">Generated Article</h3>
+        <h3 className="text-lg font-medium text-gray-900">{t('article.title')}</h3>
         
         {content && (
           <div className="flex items-center space-x-2">
@@ -156,14 +158,14 @@ export const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
                   <svg className="w-4 h-4 mr-1 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  Copied!
+                  {t('article.copied')}
                 </>
               ) : (
                 <>
                   <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
-                  Copy
+                  {t('article.copy')}
                 </>
               )}
             </button>
@@ -185,7 +187,7 @@ export const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
               <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
-              Export
+              {t('article.export')}
             </button>
           </div>
         )}
@@ -207,9 +209,9 @@ export const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
           
           <div className="flex items-center justify-between pt-3 border-t border-gray-200">
             <div className="flex items-center space-x-4 text-sm text-gray-500">
-              <span>中文字数: {stats.chineseChars}</span>
-              <span>英文单词: {stats.englishWords}</span>
-              <span>总字符: {stats.total}</span>
+              <span>{t('article.chineseChars')}: {stats.chineseChars}</span>
+              <span>{t('article.englishWords')}: {stats.englishWords}</span>
+              <span>{t('article.totalChars')}: {stats.total}</span>
             </div>
             
             {sources.length > 0 && (
@@ -217,14 +219,14 @@ export const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
                 onClick={() => setShowSources(!showSources)}
                 className="text-sm text-blue-600 hover:text-blue-800"
               >
-                {showSources ? 'Hide Sources' : `Show ${sources.length} Sources`}
+                {showSources ? t('article.hideSources') : t('article.showSources', { count: sources.length })}
               </button>
             )}
           </div>
 
           {showSources && sources.length > 0 && (
             <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Sources</h4>
+              <h4 className="text-sm font-medium text-gray-700 mb-3">{t('article.sources')}</h4>
               <div className="space-y-2">
                 {sources.map((source, index) => (
                   <div key={index} className="text-sm">
@@ -248,8 +250,8 @@ export const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
           <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <p>No article generated yet</p>
-          <p className="text-sm mt-1">Add snippets and generate an article to see it here</p>
+          <p>{t('article.noArticle')}</p>
+          <p className="text-sm mt-1">{t('article.noArticleHint')}</p>
         </div>
       )}
     </div>

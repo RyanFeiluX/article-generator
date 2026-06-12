@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { LLMConfig, LLMProvider } from '../types';
 import { DEFAULT_PROVIDER_CONFIGS } from '../types';
 
@@ -28,6 +29,7 @@ const MODEL_SUGGESTIONS: Record<LLMProvider, string[]> = {
 };
 
 export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigModalProps) {
+  const { t } = useTranslation();
   const [localProvider, setLocalProvider] = useState<LLMProvider>(config.provider);
   const [localConfig, setLocalConfig] = useState<Record<string, any>>(config.config || DEFAULT_PROVIDER_CONFIGS[config.provider]);
 
@@ -64,17 +66,17 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
         return (
           <>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">ARK API Key</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.arkApiKey')}</label>
               <input
                 type="password"
                 value={localConfig.apiKey}
                 onChange={(e) => handleConfigChange('apiKey', e.target.value)}
-                placeholder="Enter your Volc ARK API key"
+                placeholder={t('config.arkApiKeyPlaceholder')}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">API Base URL</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.baseUrl')}</label>
               <input
                 type="text"
                 value={localConfig.baseUrl}
@@ -83,7 +85,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Model</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.model')}</label>
               <input
                 type="text"
                 value={localConfig.model}
@@ -98,7 +100,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
         return (
           <>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">OpenAI API Key</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.openaiApiKey')}</label>
               <input
                 type="password"
                 value={localConfig.apiKey}
@@ -108,7 +110,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Model</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.model')}</label>
               <select
                 value={localConfig.model}
                 onChange={(e) => handleConfigChange('model', e.target.value)}
@@ -126,7 +128,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
         return (
           <>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Azure API Key</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.azureApiKey')}</label>
               <input
                 type="password"
                 value={localConfig.apiKey}
@@ -135,7 +137,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Azure Endpoint</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.endpoint')}</label>
               <input
                 type="text"
                 value={localConfig.endpoint}
@@ -144,7 +146,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Deployment Name</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.deploymentName')}</label>
               <input
                 type="text"
                 value={localConfig.deploymentName}
@@ -159,7 +161,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
         return (
           <>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Anthropic API Key</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.anthropicApiKey')}</label>
               <input
                 type="password"
                 value={localConfig.apiKey}
@@ -169,7 +171,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Model</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.model')}</label>
               <select
                 value={localConfig.model}
                 onChange={(e) => handleConfigChange('model', e.target.value)}
@@ -187,7 +189,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
         return (
           <>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">DeepSeek API Key</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.deepseekApiKey')}</label>
               <input
                 type="password"
                 value={localConfig.apiKey}
@@ -197,7 +199,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">API Base URL</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.baseUrl')}</label>
               <input
                 type="text"
                 value={localConfig.baseUrl}
@@ -206,7 +208,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Model</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.model')}</label>
               <select
                 value={localConfig.model}
                 onChange={(e) => handleConfigChange('model', e.target.value)}
@@ -224,7 +226,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
         return (
           <>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">API Key</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.apiKey')}</label>
               <input
                 type="password"
                 value={localConfig.apiKey}
@@ -233,7 +235,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">API Base URL</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.baseUrl')}</label>
               <input
                 type="text"
                 value={localConfig.baseUrl}
@@ -242,7 +244,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Model</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.model')}</label>
               <input
                 type="text"
                 value={localConfig.model}
@@ -264,7 +266,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
     return (
       <>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Temperature</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.temperature')}</label>
           <input
             type="range"
             min="0"
@@ -276,7 +278,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Max Tokens</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.maxTokens')}</label>
           <input
             type="number"
             min="512"
@@ -288,7 +290,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
         </div>
         {localProvider !== 'anthropic' && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Top P</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.topP')}</label>
             <input
               type="range"
               min="0"
@@ -309,7 +311,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4">
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white">LLM Configuration</h2>
+            <h2 className="text-xl font-semibold text-white">{t('config.title')}</h2>
             <button
               onClick={onClose}
               className="text-white/80 hover:text-white"
@@ -323,7 +325,7 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
 
         <div className="px-6 py-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">LLM Provider</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.provider')}</label>
             <select
               value={localProvider}
               onChange={(e) => handleProviderChange(e.target.value as LLMProvider)}
@@ -346,13 +348,13 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
               onClick={onClose}
               className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
             >
-              Cancel
+              {t('config.cancel')}
             </button>
             <button
               onClick={handleSave}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
-              Save Settings
+              {t('config.save')}
             </button>
           </div>
         </div>

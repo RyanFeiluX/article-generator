@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { GenerationProgress } from '../types';
 
 interface ProgressPanelProps {
@@ -12,6 +13,7 @@ export const ProgressPanel: React.FC<ProgressPanelProps> = ({
   isGenerating,
   error
 }) => {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
   const getStatusColor = (status: string) => {
@@ -85,21 +87,21 @@ export const ProgressPanel: React.FC<ProgressPanelProps> = ({
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'preparing':
-        return 'Preparing';
+        return t('progress.preparing');
       case 'searching':
-        return 'Searching Web';
+        return t('progress.searching');
       case 'generating':
-        return 'Generating';
+        return t('progress.generating');
       case 'verifying':
-        return 'Verifying';
+        return t('progress.verifying');
       case 'improving':
-        return 'Improving';
+        return t('progress.improving');
       case 'complete':
-        return 'Complete';
+        return t('progress.complete');
       case 'error':
-        return 'Error';
+        return t('progress.error');
       default:
-        return 'Processing';
+        return t('progress.processing');
     }
   };
 
@@ -132,7 +134,7 @@ export const ProgressPanel: React.FC<ProgressPanelProps> = ({
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-medium text-gray-900">Generation Status</h3>
+        <h3 className="text-lg font-medium text-gray-900">{t('progress.title')}</h3>
         {(isGenerating || progress) && (
           <button
             onClick={copyStatusToClipboard}
@@ -141,21 +143,21 @@ export const ProgressPanel: React.FC<ProgressPanelProps> = ({
                 ? 'bg-green-100 text-green-700' 
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
-            title="Copy status to clipboard"
+            title={t('progress.copy')}
           >
             {copied ? (
               <>
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                <span>Copied!</span>
+                <span>{t('progress.copied')}</span>
               </>
             ) : (
               <>
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
-                <span>Copy</span>
+                <span>{t('progress.copy')}</span>
               </>
             )}
           </button>
@@ -172,7 +174,7 @@ export const ProgressPanel: React.FC<ProgressPanelProps> = ({
             <button
               onClick={copyErrorToClipboard}
               className="flex-shrink-0 p-1 text-red-400 hover:text-red-600 transition-colors"
-              title="Copy error message"
+              title={t('progress.copy')}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -211,7 +213,7 @@ export const ProgressPanel: React.FC<ProgressPanelProps> = ({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
           <p className="text-gray-500 text-sm">
-            Add snippets and click "Generate Article" to start
+            {t('progress.idleHint')}
           </p>
         </div>
       )}
@@ -223,8 +225,8 @@ export const ProgressPanel: React.FC<ProgressPanelProps> = ({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <p className="text-green-700 font-medium">Article Ready!</p>
-          <p className="text-gray-500 text-sm mt-1">Scroll down to view your article</p>
+          <p className="text-green-700 font-medium">{t('progress.ready')}</p>
+          <p className="text-gray-500 text-sm mt-1">{t('progress.readyHint')}</p>
         </div>
       )}
     </div>

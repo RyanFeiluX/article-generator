@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import i18next from 'i18next';
 import type { 
   Snippet, 
   ArticleRequest, 
@@ -161,7 +162,7 @@ export function useArticleGenerator({ llmConfig }: UseArticleGeneratorProps): Us
   const generateArticle = useCallback(async () => {
     const validSnippets = snippets.filter(s => s.content.trim().length > 0);
     if (validSnippets.length === 0) {
-      setError('Please add at least one non-empty snippet');
+      setError(i18next.t('errors.noSnippet'));
       return;
     }
 
@@ -265,9 +266,9 @@ export function useArticleGenerator({ llmConfig }: UseArticleGeneratorProps): Us
 
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        setError('Generation cancelled');
+        setError(i18next.t('errors.generationCancelled'));
       } else {
-        setError(err.message || 'Failed to generate article');
+        setError(err.message || i18next.t('errors.generationFailed'));
       }
     } finally {
       setIsGenerating(false);

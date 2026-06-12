@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { SnippetInput } from './components/SnippetInput';
 import { ProgressPanel } from './components/ProgressPanel';
 import { ArticleDisplay } from './components/ArticleDisplay';
@@ -9,6 +10,8 @@ import { DEFAULT_PROVIDER_CONFIGS } from './types';
 import { useArticleGenerator } from './hooks/useArticleGenerator';
 
 function App() {
+  const { t, i18n } = useTranslation();
+
   // Default to Volc provider
   const defaultConfig: LLMConfig = {
     provider: 'volc',
@@ -67,6 +70,12 @@ function App() {
     setLlmConfig(config);
   };
 
+  const toggleLanguage = () => {
+    const nextLang = i18n.language === 'zh' ? 'en' : 'zh';
+    i18n.changeLanguage(nextLang);
+    localStorage.setItem('i18n-lang', nextLang);
+  };
+
   const {
     snippets,
     isGenerating,
@@ -95,20 +104,29 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Article Generator</h1>
-              <p className="text-sm text-gray-500">Transform your snippets into polished articles</p>
+              <h1 className="text-2xl font-bold text-gray-900">{t('header.title')}</h1>
+              <p className="text-sm text-gray-500">{t('header.subtitle')}</p>
             </div>
             <div className="flex items-center space-x-3">
               <button
+                onClick={toggleLanguage}
+                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors flex items-center space-x-1"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{i18n.language === 'zh' ? '中文' : 'EN'}</span>
+              </button>
+              <button
                 onClick={() => setShowConfig(true)}
                 className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors flex items-center space-x-1"
-                title="LLM Settings"
+                title={t('header.settings')}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                <span>Settings</span>
+                <span>{t('header.settings')}</span>
               </button>
               <button
                 onClick={() => setShowSensitiveWords(true)}
@@ -117,10 +135,10 @@ function App() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-                <span>Sensitive Words</span>
+                <span>{t('header.sensitiveWords')}</span>
               </button>
               <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
-                Powered by AI
+                {t('header.poweredByAI')}
               </span>
             </div>
           </div>
@@ -141,7 +159,7 @@ function App() {
             {/* Generation Settings */}
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Generation Settings</h3>
+                <h3 className="text-lg font-medium text-gray-900">{t('settings.title')}</h3>
                 {snippets.length > 0 && (
                   <button
                     onClick={clearAll}
@@ -150,7 +168,7 @@ function App() {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
-                    <span>Clear All</span>
+                    <span>{t('settings.clearAll')}</span>
                   </button>
                 )}
               </div>
@@ -158,29 +176,29 @@ function App() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Topic / Title Hint (Optional)
+                    {t('settings.topicLabel')}
                   </label>
                   <input
                     type="text"
                     value={topic}
                     onChange={(e) => setTopic(e.target.value)}
-                    placeholder="Enter a topic or title..."
+                    placeholder={t('settings.topicPlaceholder')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Article Style
+                    {t('settings.styleLabel')}
                   </label>
                   <select
                     value={style}
                     onChange={(e) => setStyle(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="informative">Informative</option>
-                    <option value="casual">Casual</option>
-                    <option value="formal">Formal</option>
+                    <option value="informative">{t('settings.styleInformative')}</option>
+                    <option value="casual">{t('settings.styleCasual')}</option>
+                    <option value="formal">{t('settings.styleFormal')}</option>
                   </select>
                 </div>
 
@@ -193,7 +211,7 @@ function App() {
                     className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                   />
                   <label htmlFor="useSearch" className="text-sm text-gray-700">
-                    Supplement with web search
+                    {t('settings.useSearch')}
                   </label>
                 </div>
 
@@ -208,14 +226,14 @@ function App() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                       </svg>
-                      <span>Generating...</span>
+                      <span>{t('settings.generating')}</span>
                     </>
                   ) : (
                     <>
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
-                      <span>Generate Article</span>
+                      <span>{t('settings.generate')}</span>
                     </>
                   )}
                 </button>
@@ -225,7 +243,7 @@ function App() {
                     onClick={reset}
                     className="w-full px-4 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
                   >
-                    Cancel
+                    {t('settings.cancel')}
                   </button>
                 )}
               </div>
@@ -253,7 +271,7 @@ function App() {
       <footer className="bg-white border-t border-gray-200 mt-12">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between text-sm text-gray-500">
-            <p>Article Generator - Transform your text snippets into polished articles with AI</p>
+            <p>{t('footer.description')}</p>
             <p className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">v{(window as any).APP_VERSION || '0.0.1'}</p>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface CategoryConfig {
   label: string;
@@ -18,6 +19,7 @@ interface SensitiveWordsModalProps {
 }
 
 export const SensitiveWordsModal: React.FC<SensitiveWordsModalProps> = ({ isOpen, onClose }) => {
+  const { t } = useTranslation();
   const [data, setData] = useState<SensitiveWordsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,12 +43,12 @@ export const SensitiveWordsModal: React.FC<SensitiveWordsModalProps> = ({ isOpen
     try {
       const response = await fetch('/api/sensitive-words');
       if (!response.ok) {
-        throw new Error('无法加载敏感词列表');
+        throw new Error(t('errors.loadSensitiveWordsFailed'));
       }
       const result = await response.json();
       setData(result);
     } catch (err: any) {
-      setError(err.message || '无法加载敏感词');
+      setError(err.message || t('errors.loadSensitiveWordsError'));
     } finally {
       setLoading(false);
     }
@@ -75,7 +77,7 @@ export const SensitiveWordsModal: React.FC<SensitiveWordsModalProps> = ({ isOpen
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('Error response:', errorData);
-        throw new Error(errorData.detail || `请求失败: ${response.status}`);
+        throw new Error(errorData.detail || t('errors.requestFailed', { status: response.status }));
       }
       
       const result = await response.json();
@@ -97,7 +99,7 @@ export const SensitiveWordsModal: React.FC<SensitiveWordsModalProps> = ({ isOpen
       });
     } catch (err: any) {
       console.error('Toggle error:', err);
-      setError(err.message || '更新类别失败，请重试');
+      setError(err.message || t('errors.toggleCategoryFailed'));
     } finally {
       setUpdating(null);
     }
@@ -118,7 +120,7 @@ export const SensitiveWordsModal: React.FC<SensitiveWordsModalProps> = ({ isOpen
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || '添加词汇失败');
+        throw new Error(errorData.detail || t('errors.addWordFailed'));
       }
       
       const result = await response.json();
@@ -143,7 +145,7 @@ export const SensitiveWordsModal: React.FC<SensitiveWordsModalProps> = ({ isOpen
       setNewWord(prev => ({ ...prev, [category]: '' }));
     } catch (err: any) {
       console.error('Add word error:', err);
-      setError(err.message || '添加词汇失败');
+      setError(err.message || t('errors.addWordFailed'));
     } finally {
       setAddingWord(null);
     }
@@ -161,7 +163,7 @@ export const SensitiveWordsModal: React.FC<SensitiveWordsModalProps> = ({ isOpen
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || '删除词汇失败');
+        throw new Error(errorData.detail || t('errors.deleteWordFailed'));
       }
       
       console.log('Delete word result:', await response.json());
@@ -182,7 +184,7 @@ export const SensitiveWordsModal: React.FC<SensitiveWordsModalProps> = ({ isOpen
       });
     } catch (err: any) {
       console.error('Delete word error:', err);
-      setError(err.message || '删除词汇失败');
+      setError(err.message || t('errors.deleteWordFailed'));
     } finally {
       setUpdating(null);
     }
@@ -261,10 +263,10 @@ export const SensitiveWordsModal: React.FC<SensitiveWordsModalProps> = ({ isOpen
             <div className="flex justify-between items-start mb-4">
               <div>
                 <h3 className="text-lg leading-6 font-medium text-gray-900">
-                  敏感词配置
+                  {t('sensitive.title')}
                 </h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  启用或禁用内容类别进行过滤
+                  {t('sensitive.subtitle')}
                 </p>
               </div>
               <button
@@ -297,10 +299,10 @@ export const SensitiveWordsModal: React.FC<SensitiveWordsModalProps> = ({ isOpen
                 <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
                   <div>
                     <p className="text-sm font-medium text-gray-900">
-                      监控状态
+                      {t('sensitive.monitorStatus')}
                     </p>
                     <p className="text-xs text-gray-500">
-                      已启用 {enabledCount} / {totalCount} 个类别
+                      {t('sensitive.enabledCategories', { enabled: enabledCount, total: totalCount })}
                     </p>
                   </div>
                   <div className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -310,7 +312,7 @@ export const SensitiveWordsModal: React.FC<SensitiveWordsModalProps> = ({ isOpen
                         ? 'bg-yellow-100 text-yellow-700'
                         : 'bg-gray-100 text-gray-600'
                   }`}>
-                    {enabledCount === totalCount ? '完全防护' : enabledCount > 0 ? '部分防护' : '已禁用'}
+                    {enabledCount === totalCount ? t('sensitive.fullProtection') : enabledCount > 0 ? t('sensitive.partialProtection') : t('sensitive.disabled')}
                   </div>
                 </div>
 
@@ -326,7 +328,7 @@ export const SensitiveWordsModal: React.FC<SensitiveWordsModalProps> = ({ isOpen
                         </div>
                         <div>
                           <h4 className="font-medium text-gray-900">{config.label}</h4>
-                          <p className="text-xs text-gray-500">{config.words.length} 个词汇</p>
+                          <p className="text-xs text-gray-500">{config.words.length} {t('sensitive.words')}</p>
                         </div>
                       </div>
                       
@@ -358,7 +360,7 @@ export const SensitiveWordsModal: React.FC<SensitiveWordsModalProps> = ({ isOpen
                                 onClick={() => deleteWord(category, word)}
                                 disabled={updating === `${category}-${word}`}
                                 className="ml-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-                                title="删除词汇"
+                                title={t('sensitive.deleteWord')}
                               >
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -375,7 +377,7 @@ export const SensitiveWordsModal: React.FC<SensitiveWordsModalProps> = ({ isOpen
                             value={newWord[category] || ''}
                             onChange={(e) => setNewWord(prev => ({ ...prev, [category]: e.target.value }))}
                             onKeyDown={(e) => e.key === 'Enter' && addWord(category)}
-                            placeholder="添加新词汇..."
+                            placeholder={t('sensitive.addPlaceholder')}
                             className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                           />
                           <button
@@ -393,7 +395,7 @@ export const SensitiveWordsModal: React.FC<SensitiveWordsModalProps> = ({ isOpen
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                               </svg>
                             )}
-                            添加
+                            {t('sensitive.add')}
                           </button>
                         </div>
                       </>
@@ -410,7 +412,7 @@ export const SensitiveWordsModal: React.FC<SensitiveWordsModalProps> = ({ isOpen
               onClick={onClose}
               className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
             >
-              Close
+              {t('sensitive.close')}
             </button>
           </div>
         </div>
