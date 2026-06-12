@@ -293,7 +293,30 @@ docker run -d \
 
 Replace `OWNER` with the GitHub repository owner.
 
-> You can also pin a specific version instead of `latest`, e.g. `ghcr.io/OWNER/article-generator:1.2.3`.
+#### Image Tags
+
+Each release publishes Docker images with the following tags. Browse available versions on the [Releases](https://github.com/OWNER/article-generator/releases) page.
+
+| Tag | Example | Description |
+|-----|---------|-------------|
+| `latest` | `:latest` | Most recent stable release |
+| Full version | `:1.2.3` | Pin to an exact release |
+| Major.minor | `:1.2` | Latest patch within a minor version |
+
+**Examples:**
+
+```bash
+# Latest stable release
+docker run -d --name article-generator -p 5000:5000 ghcr.io/OWNER/article-generator:latest
+
+# Pin to a specific version
+docker run -d --name article-generator -p 5000:5000 ghcr.io/OWNER/article-generator:1.2.3
+
+# Track patches within a minor version
+docker run -d --name article-generator -p 5000:5000 ghcr.io/OWNER/article-generator:1.2
+```
+
+> Pinning a specific version (e.g. `:1.2.3`) is recommended for production use to avoid unexpected changes when pulling.
 
 Once running, open [http://localhost:5000](http://localhost:5000) in your browser. Configure your LLM provider and API key via the **Settings** panel in the UI. The application supports multiple providers:
 
