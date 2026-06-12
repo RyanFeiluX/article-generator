@@ -1,5 +1,7 @@
 # Article Generator
 
+[English](README.md) | [中文](README.zh.md)
+
 AI-powered article generation from text snippets with content verification.
 
 ## Quick Start
