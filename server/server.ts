@@ -30,6 +30,9 @@ async function startServer(): Promise<Server> {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
+  // 服务公共静态文件（包括 favicon）
+  app.use(express.static('public'));
+
   // 注册 API 路由
   app.use(router);
 

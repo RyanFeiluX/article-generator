@@ -17,4 +17,5 @@ export default defineConfig({
       interval: 100,
     }
   },
+  publicDir: 'public',
 });
