@@ -29,7 +29,7 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
 
 COPY frontend/src /app/frontend/src
 COPY frontend/index.html /app/frontend/
-COPY frontend/public /app/frontend/public
+RUN mkdir -p /app/frontend/public
 COPY frontend/tsconfig.json /app/frontend/
 COPY frontend/tsconfig.node.json /app/frontend/
 COPY frontend/vite.config.ts /app/frontend/
