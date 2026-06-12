@@ -68,3 +68,4 @@ Thumbs.db
 .coze-logs
 frontend/public/version.js
 .coze
+.vscode/
