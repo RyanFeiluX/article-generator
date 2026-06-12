@@ -278,10 +278,83 @@ gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app
 
 ## Docker Deployment
 
-A docker-compose.yml is provided for containerized deployment:
+Docker is the recommended way to run Article Generator. Choose between a pre-built image (quickest) or building from source.
+
+### Option A: Pre-built Image (Recommended)
+
+Pull and run the published Docker image directly from GitHub Container Registry:
 
 ```bash
+docker run -d \
+  --name article-generator \
+  -p 5000:5000 \
+  ghcr.io/OWNER/article-generator:latest
+```
+
+Replace `OWNER` with the GitHub repository owner.
+
+> You can also pin a specific version instead of `latest`, e.g. `ghcr.io/OWNER/article-generator:1.2.3`.
+
+Once running, open [http://localhost:5000](http://localhost:5000) in your browser. Configure your LLM provider and API key via the **Settings** panel in the UI. The application supports multiple providers:
+
+- **Volc Engine ARK** (default)
+- **OpenAI**
+- **Azure OpenAI**
+- **Anthropic**
+- **DeepSeek**
+- **Custom** (any OpenAI-compatible API)
+
+#### Optional: Volc Engine ARK Environment Variables
+
+If you use the **Volc Engine ARK** provider, you can optionally pre-configure credentials via environment variables so they are available without visiting the Settings panel:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ARK_API_KEY` | *(empty)* | Volc Engine ARK API key |
+| `ARK_MODEL` | `ep-20260413174919-nqclc` | Model endpoint ID |
+| `ARK_BASE_URL` | `https://ark.cn-beijing.volces.com/api/v3` | ARK API base URL |
+
+```bash
+docker run -d \
+  --name article-generator \
+  -p 5000:5000 \
+  -e ARK_API_KEY=your_api_key_here \
+  ghcr.io/OWNER/article-generator:latest
+```
+
+> These variables only apply to the Volc provider. For all other providers, configure the API key through the Settings panel in the UI.
+
+### Option B: Build from Source
+
+Clone the repository and build the image locally using docker-compose:
+
+```bash
+git clone <repository-url>
+cd article-generator
 docker-compose up -d
+```
+
+Or use the provided build scripts which auto-increment the version:
+
+```bash
+# Linux / macOS
+./docker_up.sh
+
+# Windows
+docker_up.bat
+```
+
+### Managing the Container
+
+```bash
+# View logs
+docker logs -f article-generator
+
+# Stop the container
+docker stop article-generator
+
+# Remove the container
+docker rm article-generator
 ```
 
 ## License
