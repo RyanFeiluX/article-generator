@@ -743,6 +743,12 @@ class GenerationProgress(BaseModel):
     message: str
     progress: float = 0.0
 
+class SearchResult(BaseModel):
+    title: str
+    url: str
+    snippet: str
+    site: str
+
 
 def compute_target_length(snippets: List[SnippetInput]) -> int:
     """Compute the target article length dynamically based on input size.
@@ -1094,6 +1100,70 @@ Improved Chinese content here."""
     return await generate_with_llm(improvement_prompt, "You are a professional article editor who fixes issues by enriching and expanding content — never by shrinking or removing it.", llm_config)
 
 
+async def search_duckduckgo(query: str, max_results: int = 5) -> List[SearchResult]:
+    """Search DuckDuckGo (no API key required)"""
+    url = "https://api.duckduckgo.com/"
+    params = {"q": query, "format": "json", "no_html": 1, "skip_disambig": 1}
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            results = []
+
+            def extract_site(first_url: str) -> str:
+                try:
+                    return first_url.split("/")[2]
+                except Exception:
+                    return ""
+
+            for topic in data.get("RelatedTopics", []):
+                if len(results) >= max_results:
+                    break
+                if "Topics" in topic:
+                    for sub in topic["Topics"]:
+                        if len(results) >= max_results:
+                            break
+                        text = sub.get("Text", "")
+                        first_url = sub.get("FirstURL", "")
+                        if text:
+                            results.append(SearchResult(
+                                title=text[:120],
+                                url=first_url,
+                                snippet=text,
+                                site=extract_site(first_url)
+                            ))
+                else:
+                    text = topic.get("Text", "")
+                    first_url = topic.get("FirstURL", "")
+                    if text:
+                        results.append(SearchResult(
+                            title=text[:120],
+                            url=first_url,
+                            snippet=text,
+                            site=extract_site(first_url)
+                        ))
+
+            # Add abstract result if available and we have room
+            if data.get("AbstractText") and len(results) < max_results:
+                abstract_url = data.get("AbstractURL", "")
+                results.append(SearchResult(
+                    title=data["AbstractText"][:120],
+                    url=abstract_url,
+                    snippet=data["AbstractText"],
+                    site=extract_site(abstract_url)
+                ))
+
+            print(f"[SEARCH] DuckDuckGo returned {len(results)} results for query: {query[:80]}", flush=True)
+            return results[:max_results]
+
+    except Exception as e:
+        print(f"[SEARCH] DuckDuckGo failed: {e}", flush=True)
+        return []
+
+
 async def generate_article_stream(
     snippets: List[SnippetInput],
     topic: Optional[str],
@@ -1116,29 +1186,82 @@ async def generate_article_stream(
             for i, s in enumerate(snippets)
         ])
         
-        # Step 2: First pass - Combine all snippets into a coherent article
-        yield send_progress("generating", "正在合并文本片段并补充内容...", 20)
+        search_results: List[SearchResult] = []
         
-        # Compute dynamic target length
+        # Step 2: Web search (if enabled)
+        if use_search:
+            yield send_progress("searching", "正在搜索相关信息...", 10)
+            search_query = topic or " ".join([s.content[:60] for s in snippets[:3]])
+            search_results = await search_duckduckgo(search_query, max_search_results)
+            print(f"[SEARCH] Retrieved {len(search_results)} results", flush=True)
+        
+        # Step 3: First pass - Combine all snippets into a coherent article
+        if use_search:
+            yield send_progress("generating", "正在合并文本片段并补充内容...", 20)
+        else:
+            yield send_progress("generating", "正在合并文本片段...", 20)
+        
+        # Compute dynamic target length (only used when search is enabled)
         target_len = compute_target_length(snippets)
         total_input = sum(len(s.content) for s in snippets)
         
-        # First prompt: Combine snippets AND expand short content with supplementary material
-        combine_prompt = f"""## Text Snippets:
+        # Build search context if results available
+        search_context = ""
+        if search_results:
+            search_lines = [
+                f"- {r.title}: {r.snippet}"
+                for r in search_results
+            ]
+            search_context = "\n\n## Web Search Supplementary Information:\n" + "\n".join(search_lines)
+        
+        # Select prompt based on whether web search is enabled
+        if use_search:
+            combine_prompt = f"""## Text Snippets:
 {snippets_text}
 
 ## Topic: {topic or 'Comprehensive article based on text snippets'}
 ## Target: At least {target_len} characters (input is {total_input} chars — add ~{target_len - total_input} chars of supplementary content)
+{search_context}
 
-## Task: Create a SUBSTANTIVE article by combining snippets AND generating supplementary content. EXPAND, never shrink.
+## Task: Create a SUBSTANTIVE article by combining snippets AND the web search results above. EXPAND, never shrink.
 
 ## Requirements:
 1. **Anti-Shrink**: Never condense or summarize snippets. All original content must remain and be built upon.
-2. **Supplement**: Add background context, explanations, examples, analysis, implications, or related concepts based on the snippets.
-3. **Length**: Final article must be at least {target_len} characters. Compensate short input with well-developed supplementary material.
-4. **Coherence**: All content — original and generated — must form one unified narrative with smooth transitions.
-5. **Structure**: Include introduction, well-developed body, and conclusion.
-6. **Engaging title**: 10-20 Chinese characters reflecting the full scope.
+2. **Use Web Results**: Incorporate facts, context, and data from the web search results to enrich the article.
+3. **Supplement**: Add background context, explanations, examples, analysis, implications, or related concepts based on the snippets and search results.
+4. **Length**: Final article must be at least {target_len} characters. Compensate short input with well-developed supplementary material.
+5. **Coherence**: All content — original, web-sourced, and generated — must form one unified narrative with smooth transitions.
+6. **Structure**: Include introduction, well-developed body, and conclusion.
+7. **Engaging title**: 10-20 Chinese characters reflecting the full scope.
+8. **Chinese only**.
+
+## CRITICAL — Strict Output Format:
+- Start DIRECTLY with `[Title]` — no preamble, no conversational text, no greetings, no acknowledgments.
+- `[Title]` must contain ONLY a short title (10-20 Chinese characters) on ONE line.
+- `[Content]` MUST appear on a new line after the title.
+- Never put article body text inside the [Title] line.
+
+Output Format (follow EXACTLY):
+[Title]
+Chinese Title (10-20 characters, single line)
+
+[Content]
+Chinese article content here."""
+        else:
+            combine_prompt = f"""## Text Snippets:
+{snippets_text}
+
+## Topic: {topic or 'Article based on provided text snippets'}
+
+## Task: Create a coherent article by combining the provided snippets ONLY.
+
+## CRITICAL RULES:
+1. **Faithful to source**: Use ONLY the information present in the snippets above. Do NOT add any facts, data, statistics, examples, background context, or explanations that are not explicitly stated in the snippets.
+2. **No padding**: Do not artificially expand the article. The length should reflect the content actually provided.
+3. **Polish only**: Improve grammar, clarity, organization, and flow — but never invent new content.
+4. **Preserve all original content**: Every piece of information from the snippets must be included. Do not remove or condense.
+5. **Structure**: Organize into introduction, body, and conclusion if the snippets support it.
+6. **Engaging title**: 10-20 Chinese characters based strictly on the snippets.
 7. **Chinese only**.
 
 ## CRITICAL — Strict Output Format:
@@ -1154,18 +1277,23 @@ Chinese Title (10-20 characters, single line)
 [Content]
 Chinese article content here."""
 
+        if use_search:
+            combine_system = "You are an expert article writer who expands brief content into comprehensive articles. Never summarize — always build upon and enrich input."
+        else:
+            combine_system = "You are an editor who faithfully combines provided text into a coherent article. Do NOT add any information not present in the source snippets."
         print(f"[LLM] Calling generate_with_llm with provider: {llm_config.provider if llm_config else 'volc'}", flush=True)
-        full_content = await generate_with_llm(combine_prompt, "You are an expert article writer who expands brief content into comprehensive articles. Never summarize — always build upon and enrich input.", llm_config)
+        full_content = await generate_with_llm(combine_prompt, combine_system, llm_config)
         
         title, clean_content = await extract_title_and_content(full_content)
         
-        # Step 3: Single comprehensive improvement pass to enhance quality
+        # Step 4: Single comprehensive improvement pass to enhance quality
         yield send_progress("improving", "正在优化文章质量...", 40)
         
         # Use clean extracted content (not raw LLM output) to avoid feeding preamble back
         clean_article = f"[Title]\n{title}\n\n[Content]\n{clean_content}"
         
-        improve_prompt = f"""## Article to Improve:
+        if use_search:
+            improve_prompt = f"""## Article to Improve:
 {clean_article}
 
 ## Target: Produce a polished article of at least {target_len} characters. Never shorten — only enhance and expand.
@@ -1190,25 +1318,57 @@ Chinese Title (10-20 characters, single line)
 
 [Content]
 Improved Chinese content here."""
+            improve_system = "You are a professional article editor. Polish, enrich, and expand content — never shrink or remove it."
+        else:
+            improve_prompt = f"""## Article to Polish:
+{clean_article}
+
+## Task: Polish this article by improving grammar, clarity, and flow only. Do NOT add any new information.
+
+## Requirements:
+1. **Faithful to source**: Only improve language and organization. Do NOT add facts, examples, or explanations not already present.
+2. **No expansion**: Keep the length roughly the same as the original. Do not pad or supplement.
+3. **Smooth flow**: Improve transitions and logical progression using existing content only.
+4. **Professional tone**: Use precise, professional language in {style} style.
+5. **Chinese only**.
+
+## CRITICAL — Strict Output Format:
+- Start DIRECTLY with `[Title]` — no preamble, no conversational text, no greetings.
+- `[Title]` must contain ONLY a short title (10-20 Chinese characters) on ONE line.
+- `[Content]` MUST appear on a new line after the title.
+- Never put article body text inside the [Title] line.
+
+Output Format (follow EXACTLY):
+[Title]
+Chinese Title (10-20 characters, single line)
+
+[Content]
+Polished Chinese content here."""
+            improve_system = "You are a professional editor who polishes articles without adding new information."
 
         print(f"[LLM] Calling generate_with_llm for improvement with provider: {llm_config.provider if llm_config else 'volc'}", flush=True)
-        enhanced_content = await generate_with_llm(improve_prompt, "You are a professional article editor. Polish, enrich, and expand content — never shrink or remove it.", llm_config)
+        enhanced_content = await generate_with_llm(improve_prompt, improve_system, llm_config)
         title, clean_content = await extract_title_and_content(enhanced_content)
         
-        # First verify the content (which auto-replaces sensitive words if needed)
+        # Verify the content (auto-replaces sensitive words if needed)
         yield send_progress("verifying", "正在验证文章质量...", 75)
         verification = verify_content_internal(clean_content)
         
-        # Step 4: Auto-improve if other verification checks fail
-        retry_count = 0
-        while not verification['passed'] and retry_count < MAX_RETRY_ATTEMPTS:
-            retry_count += 1
-            yield send_progress("improving", f"正在优化文章 (第 {retry_count}/{MAX_RETRY_ATTEMPTS} 次)...", 75 + retry_count * 5)
-            
-            improved = await improve_article(clean_content, verification['issues'], style, llm_config)
-            title, clean_content = await extract_title_and_content(improved)
-            
-            verification = verify_content_internal(clean_content)
+        # Step 5: Auto-improve on verification failure (only when web search supplements are enabled)
+        if use_search:
+            retry_count = 0
+            while not verification['passed'] and retry_count < MAX_RETRY_ATTEMPTS:
+                retry_count += 1
+                yield send_progress("improving", f"正在优化文章 (第 {retry_count}/{MAX_RETRY_ATTEMPTS} 次)...", 75 + retry_count * 5)
+                
+                improved = await improve_article(clean_content, verification['issues'], style, llm_config)
+                title, clean_content = await extract_title_and_content(improved)
+                
+                verification = verify_content_internal(clean_content)
+        else:
+            # Faithful mode: only warn about quality issues, don't auto-retry with expansion
+            if not verification['passed']:
+                print(f"[VERIFY] Faithful mode: verification issues found but skipped retry: {verification['issues']}", flush=True)
         
         # Use modified content if sensitive words were auto-replaced
         final_content = verification.get('modified_content') or clean_content
@@ -1223,7 +1383,16 @@ Improved Chinese content here."""
         
         yield send_progress("complete", "文章已就绪!", 100)
         title_escaped = title.replace('"', '\\"').replace('\n', ' ')
-        yield f"event: complete\ndata: {{\"title\": \"{title_escaped}\"}}\n\n"
+        
+        # Build sources data
+        complete_data = {"title": title_escaped}
+        if search_results:
+            complete_data["sources"] = [
+                {"title": r.title, "url": r.url, "snippet": r.snippet, "site": r.site}
+                for r in search_results
+            ]
+        
+        yield f"event: complete\ndata: {json.dumps(complete_data)}\n\n"
         
     except Exception as e:
         error_msg = str(e).replace('"', '\\"').replace('\n', ' ')
