@@ -69,3 +69,4 @@ Thumbs.db
 frontend/public/version.js
 .coze
 .vscode/
+__pycache__/
