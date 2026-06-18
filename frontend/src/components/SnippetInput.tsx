@@ -1,16 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface Props {
   snippets: { id: string; content: string; source?: string }[];
   onAdd: (content: string, source?: string) => void;
   onRemove: (id: string) => void;
+  onUpdate: (id: string, content: string, source?: string) => void;
 }
 
-export const SnippetInput: React.FC<Props> = ({ snippets, onAdd, onRemove }) => {
+export const SnippetInput: React.FC<Props> = ({ snippets, onAdd, onRemove, onUpdate }) => {
   const { t } = useTranslation();
   const [newContent, setNewContent] = useState('');
   const [newSource, setNewSource] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const [editSource, setEditSource] = useState('');
+  const editContentRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (editingId && editContentRef.current) {
+      editContentRef.current.focus();
+    }
+  }, [editingId]);
 
   const handleAdd = () => {
     if (newContent.trim()) {
@@ -20,10 +31,39 @@ export const SnippetInput: React.FC<Props> = ({ snippets, onAdd, onRemove }) => 
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleAddKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && e.ctrlKey) {
       e.preventDefault();
       handleAdd();
+    }
+  };
+
+  const startEditing = (snippet: { id: string; content: string; source?: string }) => {
+    setEditingId(snippet.id);
+    setEditContent(snippet.content);
+    setEditSource(snippet.source || '');
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditContent('');
+    setEditSource('');
+  };
+
+  const saveEditing = () => {
+    if (editingId && editContent.trim()) {
+      onUpdate(editingId, editContent.trim(), editSource.trim() || undefined);
+      cancelEditing();
+    }
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && e.ctrlKey) {
+      e.preventDefault();
+      saveEditing();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEditing();
     }
   };
 
@@ -40,7 +80,7 @@ export const SnippetInput: React.FC<Props> = ({ snippets, onAdd, onRemove }) => 
             <textarea
               value={newContent}
               onChange={(e) => setNewContent(e.target.value)}
-              onKeyDown={handleKeyDown}
+              onKeyDown={handleAddKeyDown}
               placeholder={t('snippet.contentPlaceholder')}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
               rows={4}
@@ -90,28 +130,82 @@ export const SnippetInput: React.FC<Props> = ({ snippets, onAdd, onRemove }) => 
                 key={snippet.id}
                 className="bg-gray-50 rounded-lg p-3 border border-gray-100"
               >
-                <div className="flex justify-between items-start">
-                  <span className="text-xs font-medium text-gray-500 bg-gray-200 px-2 py-1 rounded">
-                    #{index + 1}
-                  </span>
-                  <button
-                    onClick={() => onRemove(snippet.id)}
-                    className="text-red-500 hover:text-red-700 text-sm"
-                  >
-                    {t('snippet.remove')}
-                  </button>
-                </div>
-                
-                <p className="text-gray-700 mt-2 text-sm whitespace-pre-wrap">
-                  {snippet.content.length > 200 
-                    ? snippet.content.substring(0, 200) + '...' 
-                    : snippet.content}
-                </p>
-                
-                {snippet.source && (
-                  <p className="text-gray-500 mt-1 text-xs italic">
-                    {t('snippet.source')}: {snippet.source}
-                  </p>
+                {editingId === snippet.id ? (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-medium text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                        {t('snippet.editTitle')}
+                      </span>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={saveEditing}
+                          disabled={!editContent.trim()}
+                          className="text-green-600 hover:text-green-800 text-sm font-medium disabled:text-gray-400 disabled:cursor-not-allowed"
+                        >
+                          {t('snippet.save')}
+                        </button>
+                        <button
+                          onClick={cancelEditing}
+                          className="text-gray-500 hover:text-gray-700 text-sm"
+                        >
+                          {t('snippet.cancel')}
+                        </button>
+                      </div>
+                    </div>
+                    <textarea
+                      ref={editContentRef}
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      onKeyDown={handleEditKeyDown}
+                      className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-sm"
+                      rows={4}
+                    />
+                    <input
+                      type="text"
+                      value={editSource}
+                      onChange={(e) => setEditSource(e.target.value)}
+                      onKeyDown={handleEditKeyDown}
+                      placeholder={t('snippet.sourcePlaceholder')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                    <div className="text-xs text-gray-400">
+                      Ctrl+Enter {t('snippet.save')} | Esc {t('snippet.cancel')}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs font-medium text-gray-500 bg-gray-200 px-2 py-1 rounded">
+                        #{index + 1}
+                      </span>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => startEditing(snippet)}
+                          className="text-blue-500 hover:text-blue-700 text-sm"
+                        >
+                          {t('snippet.edit')}
+                        </button>
+                        <button
+                          onClick={() => onRemove(snippet.id)}
+                          className="text-red-500 hover:text-red-700 text-sm"
+                        >
+                          {t('snippet.remove')}
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <p className="text-gray-700 mt-2 text-sm whitespace-pre-wrap">
+                      {snippet.content.length > 200 
+                        ? snippet.content.substring(0, 200) + '...' 
+                        : snippet.content}
+                    </p>
+                    
+                    {snippet.source && (
+                      <p className="text-gray-500 mt-1 text-xs italic">
+                        {t('snippet.source')}: {snippet.source}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             ))}

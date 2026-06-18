@@ -17,6 +17,10 @@
     "total": "合计",
     "chars": "字符",
     "characters": "字符",
+    "edit": "编辑",
+    "save": "保存",
+    "cancel": "取消",
+    "editTitle": "编辑片段",
     "remove": "移除",
     "source": "来源"
   },

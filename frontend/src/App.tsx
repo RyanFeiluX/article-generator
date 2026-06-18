@@ -89,6 +89,7 @@ function App() {
     useSearch,
     addSnippet,
     removeSnippet,
+    updateSnippet,
     clearAll,
     generateArticle,
     reset,
@@ -154,6 +155,7 @@ function App() {
               snippets={snippets}
               onAdd={addSnippet}
               onRemove={removeSnippet}
+              onUpdate={updateSnippet}
             />
 
             {/* Generation Settings */}

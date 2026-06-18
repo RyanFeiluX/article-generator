@@ -17,6 +17,10 @@
     "total": "Total",
     "chars": "chars",
     "characters": "characters",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "editTitle": "Edit Snippet",
     "remove": "Remove",
     "source": "Source"
   },
