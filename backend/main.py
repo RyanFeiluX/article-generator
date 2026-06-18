@@ -204,6 +204,15 @@ MIN_ARTICLE_LENGTH = 3000  # Minimum characters for a substantive article
 MAX_DUPLICATION_RATIO = 0.25  # Maximum allowed duplication ratio
 MIN_SENTENCE_COUNT = 8  # Minimum sentences for logical flow check
 MAX_RETRY_ATTEMPTS = 3  # Maximum retry attempts on verification failure
+MAX_TRUNCATION_RETRIES = 3  # Maximum retries on LLM output truncation
+MAX_TOKENS_CEILING = 32768  # Absolute max_tokens cap across all providers
+
+
+class TruncationError(Exception):
+    """Raised when LLM output is truncated due to max_tokens limit."""
+    def __init__(self, partial_content: str = "", *args):
+        self.partial_content = partial_content
+        super().__init__(*args)
 
 # Sensitive words configuration (configurable per category)
 # Chinese sensitive words with network slang replacements
@@ -465,7 +474,10 @@ class VolcProvider(LLMProvider):
                 
                 if "choices" in result and len(result["choices"]) > 0:
                     content = result["choices"][0]["message"]["content"]
-                    print(f"[LLM] Volc Engine ARK response received, length={len(content)}", flush=True)
+                    finish_reason = result["choices"][0].get("finish_reason")
+                    print(f"[LLM] Volc Engine ARK response received, length={len(content)}, finish_reason={finish_reason}", flush=True)
+                    if finish_reason == "length":
+                        raise TruncationError(partial_content=content)
                     return content
                 else:
                     print(f"[LLM] Unexpected response format: {result}", flush=True)
@@ -516,12 +528,16 @@ class OpenAIProvider(LLMProvider):
                 response.raise_for_status()
                 result = response.json()
                 content = result["choices"][0]["message"]["content"]
-                print(f"[LLM] OpenAI response received, length={len(content)}", flush=True)
-                return content
+                finish_reason = result["choices"][0].get("finish_reason")
+                print(f"[LLM] OpenAI response received, length={len(content)}, finish_reason={finish_reason}", flush=True)
                     
         except Exception as e:
             print(f"[LLM] OpenAI error: {e}", flush=True)
             raise Exception(f"OpenAI API request failed: {str(e)}")
+        
+        if finish_reason == "length":
+            raise TruncationError(partial_content=content)
+        return content
 
 
 class AzureProvider(LLMProvider):
@@ -559,12 +575,16 @@ class AzureProvider(LLMProvider):
                 response.raise_for_status()
                 result = response.json()
                 content = result["choices"][0]["message"]["content"]
-                print(f"[LLM] Azure OpenAI response received, length={len(content)}", flush=True)
-                return content
+                finish_reason = result["choices"][0].get("finish_reason")
+                print(f"[LLM] Azure OpenAI response received, length={len(content)}, finish_reason={finish_reason}", flush=True)
                     
         except Exception as e:
             print(f"[LLM] Azure OpenAI error: {e}", flush=True)
             raise Exception(f"Azure OpenAI API request failed: {str(e)}")
+        
+        if finish_reason == "length":
+            raise TruncationError(partial_content=content)
+        return content
 
 
 class AnthropicProvider(LLMProvider):
@@ -602,12 +622,16 @@ class AnthropicProvider(LLMProvider):
                 response.raise_for_status()
                 result = response.json()
                 content = result["content"][0]["text"]
-                print(f"[LLM] Anthropic response received, length={len(content)}", flush=True)
-                return content
+                stop_reason = result.get("stop_reason")
+                print(f"[LLM] Anthropic response received, length={len(content)}, stop_reason={stop_reason}", flush=True)
                     
         except Exception as e:
             print(f"[LLM] Anthropic error: {e}", flush=True)
             raise Exception(f"Anthropic API request failed: {str(e)}")
+        
+        if stop_reason == "max_tokens":
+            raise TruncationError(partial_content=content)
+        return content
 
 
 class DeepSeekProvider(LLMProvider):
@@ -659,12 +683,16 @@ class DeepSeekProvider(LLMProvider):
                 response.raise_for_status()
                 result = response.json()
                 content = result["choices"][0]["message"]["content"]
-                print(f"[LLM] DeepSeek response received, length={len(content)}", flush=True)
-                return content
+                finish_reason = result["choices"][0].get("finish_reason")
+                print(f"[LLM] DeepSeek response received, length={len(content)}, finish_reason={finish_reason}", flush=True)
                     
         except Exception as e:
             print(f"[LLM] DeepSeek error: {e}", flush=True)
             raise Exception(f"DeepSeek API request failed: {str(e)}")
+        
+        if finish_reason == "length":
+            raise TruncationError(partial_content=content)
+        return content
 
 
 class CustomProvider(LLMProvider):
@@ -703,12 +731,16 @@ class CustomProvider(LLMProvider):
                 response.raise_for_status()
                 result = response.json()
                 content = result["choices"][0]["message"]["content"]
-                print(f"[LLM] Custom API response received, length={len(content)}", flush=True)
-                return content
+                finish_reason = result["choices"][0].get("finish_reason")
+                print(f"[LLM] Custom API response received, length={len(content)}, finish_reason={finish_reason}", flush=True)
                     
         except Exception as e:
             print(f"[LLM] Custom API error: {e}", flush=True)
             raise Exception(f"Custom API request failed: {str(e)}")
+        
+        if finish_reason == "length":
+            raise TruncationError(partial_content=content)
+        return content
 
 
 # Provider Factory
@@ -921,7 +953,7 @@ def verify_content_internal(content: str) -> dict:
     }
 
 
-async def generate_with_llm(prompt: str, system_prompt: str, llm_config: Optional[LLMConfig] = None) -> str:
+async def generate_with_llm(prompt: str, system_prompt: str, llm_config: Optional[LLMConfig] = None, safe_max_tokens: Optional[int] = None) -> str:
     """Generate content using the specified LLM provider.
     
     In demo mode (no API key configured): returns a simulated response.
@@ -929,6 +961,9 @@ async def generate_with_llm(prompt: str, system_prompt: str, llm_config: Optiona
     can report the error to the user via the status panel.
     
     llm_config: Optional LLM configuration with provider and settings
+    safe_max_tokens: If provided, overrides maxTokens in config to ensure
+                     enough room for the target output length. Helps prevent
+                     truncation before the model completes naturally.
     """
     # Determine provider and config
     if llm_config:
@@ -939,6 +974,13 @@ async def generate_with_llm(prompt: str, system_prompt: str, llm_config: Optiona
     provider_type = llm_config.provider if llm_config and llm_config.provider else "volc"
     config_dict = llm_config.config.model_dump() if (llm_config and llm_config.config) else {}
     
+    # Override max_tokens with safe value if provided and larger than current
+    if safe_max_tokens is not None:
+        current_max = config_dict.get("maxTokens", 4096)
+        if safe_max_tokens > current_max:
+            print(f"[LLM] Overriding maxTokens from {current_max} to {safe_max_tokens} (safe target)", flush=True)
+            config_dict["maxTokens"] = safe_max_tokens
+    
     print(f"[LLM] Using provider: {provider_type}", flush=True)
     print(f"[LLM] llm_config object: {llm_config}", flush=True)
     print(f"[LLM] config_dict: {config_dict}", flush=True)
@@ -946,11 +988,24 @@ async def generate_with_llm(prompt: str, system_prompt: str, llm_config: Optiona
     # Get provider from factory
     provider = LLMProviderFactory.get_provider(provider_type)
     
-    try:
-        return await provider.generate(prompt, system_prompt, config_dict)
-    except Exception as e:
-        print(f"[LLM] Error from provider {provider_type}: {e}", flush=True)
-        raise
+    # Retry loop for truncation handling
+    for attempt in range(MAX_TRUNCATION_RETRIES):
+        try:
+            return await provider.generate(prompt, system_prompt, config_dict)
+        except TruncationError as e:
+            current_max_tokens = config_dict.get("maxTokens", 4096)
+            new_max_tokens = min(current_max_tokens * 2, MAX_TOKENS_CEILING)
+            print(f"[LLM] Output truncated (finish_reason=length, got {len(e.partial_content)} chars), "
+                  f"retrying with max_tokens={new_max_tokens} (attempt {attempt+1}/{MAX_TRUNCATION_RETRIES})", flush=True)
+            
+            if attempt == MAX_TRUNCATION_RETRIES - 1 or new_max_tokens == current_max_tokens:
+                print(f"[LLM] Max retries or ceiling reached, returning partial content ({len(e.partial_content)} chars)", flush=True)
+                return e.partial_content
+            
+            config_dict["maxTokens"] = new_max_tokens
+        except Exception as e:
+            print(f"[LLM] Error from provider {provider_type}: {e}", flush=True)
+            raise
 
 
 async def simulate_llm_response(prompt: str, error_detail: str = None) -> str:
@@ -1059,7 +1114,7 @@ async def extract_title_and_content(text: str) -> tuple:
     return title, content
 
 
-async def improve_article(current_content: str, issues: List[str], style: str, llm_config: Optional[LLMConfig] = None) -> str:
+async def improve_article(current_content: str, issues: List[str], style: str, llm_config: Optional[LLMConfig] = None, safe_max_tokens: Optional[int] = None) -> str:
     issues_text = "\n".join([f"- {issue}" for issue in issues])
     
     improvement_prompt = f"""## Task: Improve Article Quality (EXPANSION ONLY — No Shrinking)
@@ -1097,7 +1152,7 @@ Chinese Title (10-20 characters, single line)
 Improved Chinese content here."""
 
     print(f"[LLM] Calling generate_with_llm for improvement retry with provider: {llm_config.provider if llm_config else 'volc'}", flush=True)
-    return await generate_with_llm(improvement_prompt, "You are a professional article editor who fixes issues by enriching and expanding content — never by shrinking or removing it.", llm_config)
+    return await generate_with_llm(improvement_prompt, "You are a professional article editor who fixes issues by enriching and expanding content — never by shrinking or removing it.", llm_config, safe_max_tokens)
 
 
 async def search_duckduckgo(query: str, max_results: int = 5) -> List[SearchResult]:
@@ -1205,6 +1260,15 @@ async def generate_article_stream(
         target_len = compute_target_length(snippets)
         total_input = sum(len(s.content) for s in snippets)
         
+        # Compute safe max_tokens to prevent output truncation
+        # Chinese content ~1.5-2 chars/token; use 1.2 as a safe estimate
+        user_max_tokens = 4096
+        if llm_config and llm_config.config and hasattr(llm_config.config, 'maxTokens') and llm_config.config.maxTokens:
+            user_max_tokens = llm_config.config.maxTokens
+        safe_max_tokens = min(max(user_max_tokens, int(target_len * 1.2)), MAX_TOKENS_CEILING)
+        if safe_max_tokens > user_max_tokens:
+            print(f"[LENGTH] Computed safe_max_tokens={safe_max_tokens} (target_len={target_len}, user_max={user_max_tokens})", flush=True)
+        
         # Build search context if results available
         search_context = ""
         if search_results:
@@ -1282,7 +1346,7 @@ Chinese article content here."""
         else:
             combine_system = "You are an editor who faithfully combines provided text into a coherent article. Do NOT add any information not present in the source snippets."
         print(f"[LLM] Calling generate_with_llm with provider: {llm_config.provider if llm_config else 'volc'}", flush=True)
-        full_content = await generate_with_llm(combine_prompt, combine_system, llm_config)
+        full_content = await generate_with_llm(combine_prompt, combine_system, llm_config, safe_max_tokens)
         
         title, clean_content = await extract_title_and_content(full_content)
         
@@ -1347,7 +1411,7 @@ Polished Chinese content here."""
             improve_system = "You are a professional editor who polishes articles without adding new information."
 
         print(f"[LLM] Calling generate_with_llm for improvement with provider: {llm_config.provider if llm_config else 'volc'}", flush=True)
-        enhanced_content = await generate_with_llm(improve_prompt, improve_system, llm_config)
+        enhanced_content = await generate_with_llm(improve_prompt, improve_system, llm_config, safe_max_tokens)
         title, clean_content = await extract_title_and_content(enhanced_content)
         
         # Verify the content (auto-replaces sensitive words if needed)
@@ -1361,7 +1425,7 @@ Polished Chinese content here."""
                 retry_count += 1
                 yield send_progress("improving", f"正在优化文章 (第 {retry_count}/{MAX_RETRY_ATTEMPTS} 次)...", 75 + retry_count * 5)
                 
-                improved = await improve_article(clean_content, verification['issues'], style, llm_config)
+                improved = await improve_article(clean_content, verification['issues'], style, llm_config, safe_max_tokens)
                 title, clean_content = await extract_title_and_content(improved)
                 
                 verification = verify_content_internal(clean_content)
