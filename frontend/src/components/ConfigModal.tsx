@@ -8,6 +8,8 @@ interface ConfigModalProps {
   onClose: () => void;
   config: LLMConfig;
   onConfigChange: (config: LLMConfig) => void;
+  tavilyApiKey?: string;
+  onTavilyApiKeyChange?: (key: string) => void;
 }
 
 const PROVIDER_NAMES: Record<LLMProvider, string> = {
@@ -28,15 +30,17 @@ const MODEL_SUGGESTIONS: Record<LLMProvider, string[]> = {
   custom: []
 };
 
-export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigModalProps) {
+export function ConfigModal({ isOpen, onClose, config, onConfigChange, tavilyApiKey = '', onTavilyApiKeyChange }: ConfigModalProps) {
   const { t } = useTranslation();
   const [localProvider, setLocalProvider] = useState<LLMProvider>(config.provider);
   const [localConfig, setLocalConfig] = useState<Record<string, any>>(config.config || DEFAULT_PROVIDER_CONFIGS[config.provider]);
+  const [localTavilyKey, setLocalTavilyKey] = useState(tavilyApiKey);
 
   useEffect(() => {
     setLocalProvider(config.provider);
     setLocalConfig(config.config || DEFAULT_PROVIDER_CONFIGS[config.provider]);
-  }, [config]);
+    setLocalTavilyKey(tavilyApiKey);
+  }, [config, tavilyApiKey]);
 
   const handleProviderChange = (newProvider: LLMProvider) => {
     setLocalProvider(newProvider);
@@ -55,6 +59,9 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
       provider: localProvider,
       config: localConfig as any
     });
+    if (onTavilyApiKeyChange) {
+      onTavilyApiKeyChange(localTavilyKey);
+    }
     onClose();
   };
 
@@ -340,6 +347,23 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange }: ConfigM
           {renderProviderForm()}
 
           {renderCommonParams()}
+
+          {/* Search Engine Section */}
+          <hr className="border-gray-200" />
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800 mb-3">{t('config.searchEngine')}</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.tavilyApiKey')}</label>
+              <input
+                type="password"
+                value={localTavilyKey}
+                onChange={(e) => setLocalTavilyKey(e.target.value)}
+                placeholder="tvly-..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              />
+              <p className="mt-1 text-xs text-gray-500">{t('config.tavilyHint')}</p>
+            </div>
+          </div>
         </div>
 
         <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">

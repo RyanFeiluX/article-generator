@@ -131,6 +131,7 @@ export interface ArticleRequest {
   style: string;
   use_search: boolean;
   max_search_results: number;
+  tavily_api_key?: string;
   llm_config?: LLMConfig;
 }
 

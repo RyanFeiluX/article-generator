@@ -87,7 +87,10 @@
     "openaiApiKey": "OpenAI API Key",
     "azureApiKey": "Azure API Key",
     "anthropicApiKey": "Anthropic API Key",
-    "deepseekApiKey": "DeepSeek API Key"
+    "deepseekApiKey": "DeepSeek API Key",
+    "searchEngine": "Search Engine",
+    "tavilyApiKey": "Tavily API Key",
+    "tavilyHint": "Leave empty to use DuckDuckGo (limited). Get a free key at tavily.com"
   },
   "sensitive": {
     "title": "Sensitive Words Configuration",

@@ -21,6 +21,7 @@ interface StoredState {
 
 interface UseArticleGeneratorProps {
   llmConfig: LLMConfig;
+  tavilyApiKey?: string;
 }
 
 interface UseArticleGeneratorReturn {
@@ -66,7 +67,7 @@ function saveStoredState(state: StoredState): void {
   }
 }
 
-export function useArticleGenerator({ llmConfig }: UseArticleGeneratorProps): UseArticleGeneratorReturn {
+export function useArticleGenerator({ llmConfig, tavilyApiKey }: UseArticleGeneratorProps): UseArticleGeneratorReturn {
   const storedState = loadStoredState();
   
   const [snippets, setSnippets] = useState<Snippet[]>(storedState?.snippets || []);
@@ -182,6 +183,7 @@ export function useArticleGenerator({ llmConfig }: UseArticleGeneratorProps): Us
       style,
       use_search: useSearch,
       max_search_results: 5,
+      tavily_api_key: tavilyApiKey || undefined,
       llm_config: llmConfig
     };
 
@@ -273,7 +275,7 @@ export function useArticleGenerator({ llmConfig }: UseArticleGeneratorProps): Us
     } finally {
       setIsGenerating(false);
     }
-  }, [snippets, topic, style, useSearch, parseSSE, generatedTitle]);
+  }, [snippets, topic, style, useSearch, parseSSE, generatedTitle, tavilyApiKey]);
 
   const reset = useCallback(() => {
     abortControllerRef.current?.abort();

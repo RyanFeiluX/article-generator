@@ -59,6 +59,10 @@ function App() {
     fetchDefaultConfig();
   }, []);
 
+  const [tavilyApiKey, setTavilyApiKey] = useState<string>(() => {
+    return localStorage.getItem('tavily-api-key') || '';
+  });
+
   const [showSensitiveWords, setShowSensitiveWords] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
 
@@ -66,8 +70,16 @@ function App() {
     localStorage.setItem('llm-config', JSON.stringify(llmConfig));
   }, [llmConfig]);
 
+  useEffect(() => {
+    localStorage.setItem('tavily-api-key', tavilyApiKey);
+  }, [tavilyApiKey]);
+
   const handleConfigChange = (config: LLMConfig) => {
     setLlmConfig(config);
+  };
+
+  const handleTavilyApiKeyChange = (key: string) => {
+    setTavilyApiKey(key);
   };
 
   const toggleLanguage = () => {
@@ -96,7 +108,7 @@ function App() {
     setTopic,
     setStyle,
     setUseSearch
-  } = useArticleGenerator({ llmConfig });
+  } = useArticleGenerator({ llmConfig, tavilyApiKey });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -291,6 +303,8 @@ function App() {
         onClose={() => setShowConfig(false)}
         config={llmConfig}
         onConfigChange={handleConfigChange}
+        tavilyApiKey={tavilyApiKey}
+        onTavilyApiKeyChange={handleTavilyApiKeyChange}
       />
     </div>
   );

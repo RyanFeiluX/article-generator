@@ -768,6 +768,7 @@ class ArticleRequest(BaseModel):
     style: Optional[str] = Field("informative")
     use_search: bool = Field(True)
     max_search_results: int = Field(5, ge=1, le=10)
+    tavily_api_key: Optional[str] = Field(None)
     llm_config: Optional[LLMConfig] = None
 
 class GenerationProgress(BaseModel):
@@ -1155,6 +1156,43 @@ Improved Chinese content here."""
     return await generate_with_llm(improvement_prompt, "You are a professional article editor who fixes issues by enriching and expanding content — never by shrinking or removing it.", llm_config, safe_max_tokens)
 
 
+async def search_tavily(query: str, api_key: str, max_results: int = 5) -> List[SearchResult]:
+    """Search using Tavily API"""
+    url = "https://api.tavily.com/search"
+    payload = {
+        "api_key": api_key,
+        "query": query,
+        "search_depth": "advanced",
+        "max_results": max_results
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, json=payload)
+            response.raise_for_status()
+            data = response.json()
+
+        results = []
+        for item in data.get("results", []):
+            title = item.get("title", "")
+            url = item.get("url", "")
+            content = item.get("content", "")
+            if title or content:
+                results.append(SearchResult(
+                    title=title[:120],
+                    url=url,
+                    snippet=content[:500],
+                    site=url.split("/")[2] if url else ""
+                ))
+
+        print(f"[SEARCH] Tavily returned {len(results)} results for query: {query[:80]}", flush=True)
+        return results[:max_results]
+
+    except Exception as e:
+        print(f"[SEARCH] Tavily failed: {e}", flush=True)
+        return []
+
+
 async def search_duckduckgo(query: str, max_results: int = 5) -> List[SearchResult]:
     """Search DuckDuckGo (no API key required)"""
     url = "https://api.duckduckgo.com/"
@@ -1225,6 +1263,7 @@ async def generate_article_stream(
     style: str,
     use_search: bool,
     max_search_results: int,
+    tavily_api_key: Optional[str] = None,
     llm_config: Optional[LLMConfig] = None
 ) -> AsyncGenerator[str, None]:
     
@@ -1247,7 +1286,10 @@ async def generate_article_stream(
         if use_search:
             yield send_progress("searching", "正在搜索相关信息...", 10)
             search_query = topic or " ".join([s.content[:60] for s in snippets[:3]])
-            search_results = await search_duckduckgo(search_query, max_search_results)
+            if tavily_api_key:
+                search_results = await search_tavily(search_query, tavily_api_key, max_search_results)
+            else:
+                search_results = await search_duckduckgo(search_query, max_search_results)
             print(f"[SEARCH] Retrieved {len(search_results)} results", flush=True)
         
         # Step 3: First pass - Combine all snippets into a coherent article
@@ -1504,6 +1546,7 @@ async def generate_article(request: ArticleRequest):
             style=request.style or "informative",
             use_search=request.use_search,
             max_search_results=request.max_search_results,
+            tavily_api_key=request.tavily_api_key,
             llm_config=request.llm_config
         ),
         media_type="text/event-stream",
