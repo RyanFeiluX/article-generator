@@ -23,7 +23,6 @@ export type LLMProvider = 'volc' | 'openai' | 'azure' | 'anthropic' | 'deepseek'
 // Provider-specific config interfaces
 export interface VolcConfig {
   apiKey: string;
-  baseUrl: string;
   model: string;
   temperature: number;
   maxTokens: number;
@@ -32,7 +31,6 @@ export interface VolcConfig {
 
 export interface OpenAIConfig {
   apiKey: string;
-  baseUrl?: string;
   model: string;
   temperature: number;
   maxTokens: number;
@@ -50,7 +48,6 @@ export interface AzureConfig {
 
 export interface AnthropicConfig {
   apiKey: string;
-  baseUrl?: string;
   model: string;
   temperature: number;
   maxTokens: number;
@@ -58,7 +55,6 @@ export interface AnthropicConfig {
 
 export interface DeepSeekConfig {
   apiKey: string;
-  baseUrl: string;
   model: string;
   temperature: number;
   maxTokens: number;
@@ -67,7 +63,6 @@ export interface DeepSeekConfig {
 
 export interface KimiConfig {
   apiKey: string;
-  baseUrl: string;
   model: string;
   temperature: number;
   maxTokens: number;
@@ -84,7 +79,6 @@ export interface LLMConfig {
 export const DEFAULT_PROVIDER_CONFIGS: Record<LLMProvider, any> = {
   volc: {
     apiKey: '',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
     model: 'doubao-pro',
     temperature: 0.7,
     maxTokens: 4096,
@@ -92,7 +86,6 @@ export const DEFAULT_PROVIDER_CONFIGS: Record<LLMProvider, any> = {
   },
   openai: {
     apiKey: '',
-    baseUrl: 'https://api.openai.com/v1',
     model: 'gpt-4',
     temperature: 0.7,
     maxTokens: 4096,
@@ -108,14 +101,12 @@ export const DEFAULT_PROVIDER_CONFIGS: Record<LLMProvider, any> = {
   },
   anthropic: {
     apiKey: '',
-    baseUrl: 'https://api.anthropic.com',
     model: 'claude-3-opus',
     temperature: 0.7,
     maxTokens: 4096
   },
   deepseek: {
     apiKey: '',
-    baseUrl: 'https://api.deepseek.com/v1',
     model: 'deepseek-v4-flash',
     temperature: 0.7,
     maxTokens: 4096,
@@ -123,7 +114,6 @@ export const DEFAULT_PROVIDER_CONFIGS: Record<LLMProvider, any> = {
   },
   kimi: {
     apiKey: '',
-    baseUrl: 'https://api.moonshot.cn/v1',
     model: 'kimi-k2.6',
     temperature: 0.7,
     maxTokens: 4096,

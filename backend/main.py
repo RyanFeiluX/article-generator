@@ -363,7 +363,6 @@ class SnippetInput(BaseModel):
 # LLM Provider specific config models
 class VolcConfig(BaseModel):
     apiKey: Optional[str] = None
-    baseUrl: Optional[str] = None
     model: Optional[str] = None
     temperature: Optional[float] = None
     maxTokens: Optional[int] = None
@@ -371,7 +370,6 @@ class VolcConfig(BaseModel):
 
 class OpenAIConfig(BaseModel):
     apiKey: Optional[str] = None
-    baseUrl: Optional[str] = None
     model: Optional[str] = None
     temperature: Optional[float] = None
     maxTokens: Optional[int] = None
@@ -387,14 +385,12 @@ class AzureConfig(BaseModel):
 
 class AnthropicConfig(BaseModel):
     apiKey: Optional[str] = None
-    baseUrl: Optional[str] = None
     model: Optional[str] = None
     temperature: Optional[float] = None
     maxTokens: Optional[int] = None
 
 class DeepSeekConfig(BaseModel):
     apiKey: Optional[str] = None
-    baseUrl: Optional[str] = None
     model: Optional[str] = None
     temperature: Optional[float] = None
     maxTokens: Optional[int] = None
@@ -402,7 +398,6 @@ class DeepSeekConfig(BaseModel):
 
 class KimiConfig(BaseModel):
     apiKey: Optional[str] = None
-    baseUrl: Optional[str] = None
     model: Optional[str] = None
     temperature: Optional[float] = None
     maxTokens: Optional[int] = None
@@ -432,22 +427,14 @@ class LLMProvider(ABC):
 class VolcProvider(LLMProvider):
     async def generate(self, prompt: str, system_prompt: str, config: dict) -> str:
         api_key = config.get("apiKey") or ARK_API_KEY
-        base_url = config.get("baseUrl") or ARK_BASE_URL
         model = config.get("model") or ARK_MODEL
         temperature = config.get("temperature") or 0.7
         max_tokens = config.get("maxTokens") or 4096
         top_p = config.get("topP") or 0.95
+        base_url = ARK_BASE_URL.rstrip("/") + "/chat/completions"
 
         if not api_key:
             return await simulate_llm_response(prompt, error_detail="⚠️ Volc Engine ARK 未配置 API Key，请在前端配置页面设置。")
-        
-        # Fix base URL to ensure it's correct
-        if base_url and not base_url.endswith("/chat/completions") and not base_url.endswith("/v1"):
-            if not base_url.endswith("/"):
-                base_url += "/"
-            base_url += "chat/completions"
-        elif base_url and base_url.endswith("/v1"):
-            base_url += "/chat/completions"
         
         print(f"[LLM] Using Volc Engine ARK: base={base_url}, model={model}", flush=True)
         
@@ -499,8 +486,8 @@ class VolcProvider(LLMProvider):
 class OpenAIProvider(LLMProvider):
     async def generate(self, prompt: str, system_prompt: str, config: dict) -> str:
         api_key = config.get("apiKey")
-        base_url = config.get("baseUrl", "https://api.openai.com/v1/chat/completions")
         model = config.get("model", "gpt-4")
+        base_url = "https://api.openai.com/v1/chat/completions"
         temperature = config.get("temperature", 0.7)
         max_tokens = config.get("maxTokens", 4096)
         top_p = config.get("topP", 0.95)
@@ -598,8 +585,8 @@ class AzureProvider(LLMProvider):
 class AnthropicProvider(LLMProvider):
     async def generate(self, prompt: str, system_prompt: str, config: dict) -> str:
         api_key = config.get("apiKey")
-        base_url = config.get("baseUrl", "https://api.anthropic.com/v1/messages")
         model = config.get("model", "claude-3-opus-20240229")
+        base_url = "https://api.anthropic.com/v1/messages"
         temperature = config.get("temperature", 0.7)
         max_tokens = config.get("maxTokens", 4096)
 
@@ -645,11 +632,11 @@ class AnthropicProvider(LLMProvider):
 class DeepSeekProvider(LLMProvider):
     async def generate(self, prompt: str, system_prompt: str, config: dict) -> str:
         api_key = config.get("apiKey")
-        base_url = config.get("baseUrl", "https://api.deepseek.com/v1")
         model = config.get("model", "deepseek-v4-flash")
         temperature = config.get("temperature", 0.7)
         max_tokens = config.get("maxTokens", 4096)
         top_p = config.get("topP", 0.95)
+        base_url = "https://api.deepseek.com/v1/chat/completions"
 
         print(f"[LLM] DeepSeek config received: {config}", flush=True)
         print(f"[LLM] DeepSeek api_key set: {bool(api_key)}", flush=True)
@@ -659,14 +646,6 @@ class DeepSeekProvider(LLMProvider):
             return await simulate_llm_response(prompt, error_detail="⚠️ DeepSeek 未配置 API Key，请在前端配置页面设置。")
         
         print(f"[LLM] Using DeepSeek: model={model}", flush=True)
-        
-        # Fix base URL to ensure it's correct
-        if base_url and not base_url.endswith("/chat/completions") and not base_url.endswith("/v1"):
-            if not base_url.endswith("/"):
-                base_url += "/"
-            base_url += "chat/completions"
-        elif base_url and base_url.endswith("/v1"):
-            base_url += "/chat/completions"
         
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -706,11 +685,11 @@ class DeepSeekProvider(LLMProvider):
 class KimiProvider(LLMProvider):
     async def generate(self, prompt: str, system_prompt: str, config: dict) -> str:
         api_key = config.get("apiKey")
-        base_url = config.get("baseUrl", "https://api.moonshot.cn/v1")
         model = config.get("model", "kimi-k2.6")
         temperature = config.get("temperature", 0.7)
         max_tokens = config.get("maxTokens", 4096)
         top_p = config.get("topP", 0.95)
+        base_url = "https://api.moonshot.cn/v1/chat/completions"
 
         print(f"[LLM] Kimi config received: {config}", flush=True)
         print(f"[LLM] Kimi api_key set: {bool(api_key)}", flush=True)
@@ -720,13 +699,6 @@ class KimiProvider(LLMProvider):
             return await simulate_llm_response(prompt, error_detail="⚠️ Kimi 未配置 API Key，请在前端配置页面设置。")
 
         print(f"[LLM] Using Kimi: model={model}", flush=True)
-
-        if base_url and not base_url.endswith("/chat/completions") and not base_url.endswith("/v1"):
-            if not base_url.endswith("/"):
-                base_url += "/"
-            base_url += "chat/completions"
-        elif base_url and base_url.endswith("/v1"):
-            base_url += "/chat/completions"
 
         headers = {
             "Authorization": f"Bearer {api_key}",

@@ -85,15 +85,6 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange, tavilyApi
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.baseUrl')}</label>
-              <input
-                type="text"
-                value={localConfig.baseUrl}
-                onChange={(e) => handleConfigChange('baseUrl', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg font-mono text-sm"
-              />
-            </div>
-            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.model')}</label>
               <input
                 type="text"
@@ -208,15 +199,6 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange, tavilyApi
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.baseUrl')}</label>
-              <input
-                type="text"
-                value={localConfig.baseUrl}
-                onChange={(e) => handleConfigChange('baseUrl', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg font-mono text-sm"
-              />
-            </div>
-            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.model')}</label>
               <select
                 value={localConfig.model}
@@ -242,15 +224,6 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange, tavilyApi
                 onChange={(e) => handleConfigChange('apiKey', e.target.value)}
                 placeholder="sk-..."
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.baseUrl')}</label>
-              <input
-                type="text"
-                value={localConfig.baseUrl}
-                onChange={(e) => handleConfigChange('baseUrl', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg font-mono text-sm"
               />
             </div>
             <div>
