@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.4
-
 # ---- Build base: Python + Node.js (for frontend build & pip install) ----
 FROM nikolaik/python-nodejs:python3.11-nodejs20 AS base
 
