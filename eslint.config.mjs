@@ -7,7 +7,6 @@ export default defineConfig([
   ...tseslint.configs.recommended,
   globalIgnores([
     'dist/**',
-    'dist-server/**',
     'node_modules/**',
     'scripts/**',
   ]),

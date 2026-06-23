@@ -1,7 +1,7 @@
 {
   "name": "projects",
   "version": "1.0.0",
-  "description": "Vanilla TypeScript application with Express + Vite (HTML + CSS + TS + Node API)",
+  "description": "Article Generator - FastAPI backend + React frontend",
   "scripts": {
     "build": "bash ./scripts/build.sh",
     "dev": "bash ./scripts/dev.sh",
@@ -12,11 +12,9 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.95.3",
-    "dotenv": "^17.2.3",
-    "express": "^4.21.2"
+    "dotenv": "^17.2.3"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
     "@types/node": "^22.10.5",
     "autoprefixer": "^10.4.20",
     "esbuild": "^0.24.2",
