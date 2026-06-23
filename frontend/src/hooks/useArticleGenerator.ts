@@ -275,7 +275,7 @@ export function useArticleGenerator({ llmConfig, tavilyApiKey }: UseArticleGener
     } finally {
       setIsGenerating(false);
     }
-  }, [snippets, topic, style, useSearch, parseSSE, generatedTitle, tavilyApiKey]);
+  }, [snippets, topic, style, useSearch, parseSSE, generatedTitle, tavilyApiKey, llmConfig]);
 
   const reset = useCallback(() => {
     abortControllerRef.current?.abort();
