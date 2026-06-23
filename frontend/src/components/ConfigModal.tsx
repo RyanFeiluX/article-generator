@@ -18,6 +18,7 @@ const PROVIDER_NAMES: Record<LLMProvider, string> = {
   azure: 'Azure OpenAI',
   anthropic: 'Anthropic Claude',
   deepseek: 'DeepSeek',
+  kimi: 'Kimi (Moonshot)',
   custom: 'Custom API'
 };
 
@@ -27,6 +28,7 @@ const MODEL_SUGGESTIONS: Record<LLMProvider, string[]> = {
   azure: [],
   anthropic: ['claude-3-5-sonnet', 'claude-3-opus', 'claude-3-haiku'],
   deepseek: ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-chat', 'deepseek-r1'],
+  kimi: ['kimi-k2.6', 'kimi-k2.5', 'kimi-k2.7-code', 'kimi-k2.7-code-highspeed', 'moonshot-v1-128k', 'moonshot-v1-32k', 'moonshot-v1-8k', 'moonshot-v1-128k-vision-preview', 'moonshot-v1-32k-vision-preview', 'moonshot-v1-8k-vision-preview'],
   custom: []
 };
 
@@ -222,6 +224,43 @@ export function ConfigModal({ isOpen, onClose, config, onConfigChange, tavilyApi
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg"
               >
                 {MODEL_SUGGESTIONS.deepseek.map(model => (
+                  <option key={model} value={model}>{model}</option>
+                ))}
+              </select>
+            </div>
+          </>
+        );
+
+      case 'kimi':
+        return (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.kimiApiKey')}</label>
+              <input
+                type="password"
+                value={localConfig.apiKey}
+                onChange={(e) => handleConfigChange('apiKey', e.target.value)}
+                placeholder="sk-..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.baseUrl')}</label>
+              <input
+                type="text"
+                value={localConfig.baseUrl}
+                onChange={(e) => handleConfigChange('baseUrl', e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg font-mono text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.model')}</label>
+              <select
+                value={localConfig.model}
+                onChange={(e) => handleConfigChange('model', e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              >
+                {MODEL_SUGGESTIONS.kimi.map(model => (
                   <option key={model} value={model}>{model}</option>
                 ))}
               </select>

@@ -18,7 +18,7 @@ export interface GenerationProgress {
 }
 
 // Provider types
-export type LLMProvider = 'volc' | 'openai' | 'azure' | 'anthropic' | 'deepseek' | 'custom';
+export type LLMProvider = 'volc' | 'openai' | 'azure' | 'anthropic' | 'deepseek' | 'kimi' | 'custom';
 
 // Provider-specific config interfaces
 export interface VolcConfig {
@@ -65,10 +65,19 @@ export interface DeepSeekConfig {
   topP: number;
 }
 
+export interface KimiConfig {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  temperature: number;
+  maxTokens: number;
+  topP: number;
+}
+
 // Unified config interface
 export interface LLMConfig {
   provider: LLMProvider;
-  config: VolcConfig | OpenAIConfig | AzureConfig | AnthropicConfig | DeepSeekConfig;
+  config: VolcConfig | OpenAIConfig | AzureConfig | AnthropicConfig | DeepSeekConfig | KimiConfig;
 }
 
 // Default provider configs
@@ -108,6 +117,14 @@ export const DEFAULT_PROVIDER_CONFIGS: Record<LLMProvider, any> = {
     apiKey: '',
     baseUrl: 'https://api.deepseek.com/v1',
     model: 'deepseek-v4-flash',
+    temperature: 0.7,
+    maxTokens: 4096,
+    topP: 0.95
+  },
+  kimi: {
+    apiKey: '',
+    baseUrl: 'https://api.moonshot.cn/v1',
+    model: 'kimi-k2.6',
     temperature: 0.7,
     maxTokens: 4096,
     topP: 0.95

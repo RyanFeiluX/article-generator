@@ -400,6 +400,14 @@ class DeepSeekConfig(BaseModel):
     maxTokens: Optional[int] = None
     topP: Optional[float] = None
 
+class KimiConfig(BaseModel):
+    apiKey: Optional[str] = None
+    baseUrl: Optional[str] = None
+    model: Optional[str] = None
+    temperature: Optional[float] = None
+    maxTokens: Optional[int] = None
+    topP: Optional[float] = None
+
 class CustomConfig(BaseModel):
     apiKey: Optional[str] = None
     baseUrl: Optional[str] = None
@@ -411,7 +419,7 @@ class CustomConfig(BaseModel):
 # Unified LLM Config
 class LLMConfig(BaseModel):
     provider: str = "volc"
-    config: Optional[VolcConfig | OpenAIConfig | AzureConfig | AnthropicConfig | DeepSeekConfig | CustomConfig] = None
+    config: Optional[VolcConfig | OpenAIConfig | AzureConfig | AnthropicConfig | DeepSeekConfig | KimiConfig | CustomConfig] = None
 
 
 # LLM Provider Interface and Implementations
@@ -695,6 +703,66 @@ class DeepSeekProvider(LLMProvider):
         return content
 
 
+class KimiProvider(LLMProvider):
+    async def generate(self, prompt: str, system_prompt: str, config: dict) -> str:
+        api_key = config.get("apiKey")
+        base_url = config.get("baseUrl", "https://api.moonshot.cn/v1")
+        model = config.get("model", "kimi-k2.6")
+        temperature = config.get("temperature", 0.7)
+        max_tokens = config.get("maxTokens", 4096)
+        top_p = config.get("topP", 0.95)
+
+        print(f"[LLM] Kimi config received: {config}", flush=True)
+        print(f"[LLM] Kimi api_key set: {bool(api_key)}", flush=True)
+
+        if not api_key:
+            print(f"[LLM] Kimi no API key, returning simulated response", flush=True)
+            return await simulate_llm_response(prompt, error_detail="⚠️ Kimi 未配置 API Key，请在前端配置页面设置。")
+
+        print(f"[LLM] Using Kimi: model={model}", flush=True)
+
+        if base_url and not base_url.endswith("/chat/completions") and not base_url.endswith("/v1"):
+            if not base_url.endswith("/"):
+                base_url += "/"
+            base_url += "chat/completions"
+        elif base_url and base_url.endswith("/v1"):
+            base_url += "/chat/completions"
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "top_p": top_p
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=300.0) as client:
+                print(f"[LLM] Kimi request URL: {base_url}", flush=True)
+                response = await client.post(base_url, headers=headers, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                content = result["choices"][0]["message"]["content"]
+                finish_reason = result["choices"][0].get("finish_reason")
+                print(f"[LLM] Kimi response received, length={len(content)}, finish_reason={finish_reason}", flush=True)
+
+        except Exception as e:
+            print(f"[LLM] Kimi error: {e}", flush=True)
+            raise Exception(f"Kimi API request failed: {str(e)}")
+
+        if finish_reason == "length":
+            raise TruncationError(partial_content=content)
+        return content
+
+
 class CustomProvider(LLMProvider):
     async def generate(self, prompt: str, system_prompt: str, config: dict) -> str:
         api_key = config.get("apiKey")
@@ -757,6 +825,8 @@ class LLMProviderFactory:
             return AnthropicProvider()
         elif provider_type == "deepseek":
             return DeepSeekProvider()
+        elif provider_type == "kimi":
+            return KimiProvider()
         elif provider_type == "custom":
             return CustomProvider()
         else:

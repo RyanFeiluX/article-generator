@@ -29,6 +29,7 @@ if os.path.exists(default_config_path):
             print("   - azure")
             print("   - anthropic")
             print("   - deepseek")
+            print("   - kimi")
             print("   - custom")
             print("="*60 + "\n")
     except Exception as e:

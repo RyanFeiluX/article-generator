@@ -88,6 +88,7 @@
     "azureApiKey": "Azure API 密钥",
     "anthropicApiKey": "Anthropic API 密钥",
     "deepseekApiKey": "DeepSeek API 密钥",
+    "kimiApiKey": "Kimi API 密钥",
     "searchEngine": "搜索引擎",
     "tavilyApiKey": "Tavily API 密钥",
     "tavilyHint": "留空则使用 DuckDuckGo（功能有限）。前往 tavily.com 获取免费密钥"
