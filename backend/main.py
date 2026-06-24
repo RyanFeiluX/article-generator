@@ -257,13 +257,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         content={"detail": exc.detail}
     )
 
-# Volc Engine ARK API Configuration
-ARK_API_KEY = os.getenv("ARK_API_KEY", "")
-ARK_BASE_URL = os.getenv("ARK_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3")
-# Ensure ARK_BASE_URL has a valid protocol
-if not ARK_BASE_URL.startswith(('http://', 'https://')):
-    ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
-ARK_MODEL = os.getenv("ARK_MODEL", "ep-20260413174919-nqclc")
+
 
 # Constants for content verification
 MIN_ARTICLE_LENGTH = 3000  # Minimum characters for a substantive article
@@ -492,12 +486,12 @@ class LLMProvider(ABC):
 
 class VolcProvider(LLMProvider):
     async def generate(self, prompt: str, system_prompt: str, config: dict) -> str:
-        api_key = config.get("apiKey") or ARK_API_KEY
-        model = config.get("model") or ARK_MODEL
-        temperature = config.get("temperature") or 0.7
-        max_tokens = config.get("maxTokens") or 4096
-        top_p = config.get("topP") or 0.95
-        base_url = ARK_BASE_URL.rstrip("/") + "/chat/completions"
+        api_key = config.get("apiKey")
+        model = config.get("model", "doubao-pro")
+        temperature = config.get("temperature", 0.7)
+        max_tokens = config.get("maxTokens", 4096)
+        top_p = config.get("topP", 0.95)
+        base_url = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
 
         if not api_key:
             return await simulate_llm_response(prompt, error_detail="⚠️ Volc Engine ARK 未配置 API Key，请在前端配置页面设置。")
@@ -1141,7 +1135,7 @@ async def simulate_llm_response(prompt: str, error_detail: str = None) -> str:
 [Content]
 这是一个基于您提供的文本片段生成的演示文章。
 
-{error_msg}本文档系统当前运行在演示模式。为了启用完整的AI驱动文章生成功能，请配置您的 **ARK_API_KEY** 环境变量。
+{error_msg}本文档系统当前运行在演示模式。为了启用完整的AI驱动文章生成功能，请在设置页面配置您的 API Key。
 
 在实际生产环境中，系统会根据您的文本片段创建一个全面的文章，包含：
 - 引人入胜的开头介绍
@@ -1637,7 +1631,6 @@ frontend_index_path = os.path.join(frontend_dist_path, "index.html")
 async def health_check():
     return {
         "status": "healthy",
-        "demo_mode": not bool(ARK_API_KEY),
         "timestamp": datetime.now().isoformat()
     }
 

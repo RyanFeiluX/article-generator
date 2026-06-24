@@ -14,7 +14,9 @@ services:
       - "5000:5000"
     environment:
       - PYTHONUNBUFFERED=1
-      - ARK_API_KEY=${ARK_API_KEY:-}
-      - ARK_MODEL=${ARK_MODEL:-ep-20260413174919-nqclc}
-      - ARK_BASE_URL=${ARK_BASE_URL:-https://ark.cn-beijing.volces.com/api/v3}
+    volumes:
+      - article-generator-config:/app/backend
     restart: unless-stopped
+
+volumes:
+  article-generator-config:
