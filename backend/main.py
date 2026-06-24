@@ -29,9 +29,10 @@ from fastapi.exceptions import RequestValidationError
 import uvicorn
 import httpx
 
-# Configuration file path for persistent sensitive words
+# Configuration file paths
 CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
 SENSITIVE_WORDS_FILE = os.path.join(CONFIG_DIR, "sensitive_words_config.json")
+TERM_TRANSLATION_FILE = os.path.join(CONFIG_DIR, "term_translation_map.json")
 
 # Default sensitive words configuration
 DEFAULT_SENSITIVE_WORDS_CONFIG = {
@@ -156,6 +157,71 @@ def save_sensitive_words_config(config):
 
 # Load configuration on module start
 SENSITIVE_WORDS_CONFIG = load_sensitive_words_config()
+
+# ============== Term Translation Map ==============
+
+DEFAULT_TERM_TRANSLATION_MAP = {
+    "enabled": True,
+    "terms": {
+        "AI": "人工智能",
+        "Machine Learning": "机器学习",
+        "Deep Learning": "深度学习",
+        "Neural Network": "神经网络",
+        "Natural Language Processing": "自然语言处理"
+    }
+}
+
+def load_term_translation_map():
+    """Load term translation map from file, or use defaults if not exists"""
+    if os.path.exists(TERM_TRANSLATION_FILE):
+        try:
+            with open(TERM_TRANSLATION_FILE, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                print(f"[CONFIG] Loaded term translation map from {TERM_TRANSLATION_FILE}", flush=True)
+                return config
+        except Exception as e:
+            print(f"[CONFIG] Error loading term translation map: {e}, using defaults", flush=True)
+
+    save_term_translation_map(DEFAULT_TERM_TRANSLATION_MAP)
+    return DEFAULT_TERM_TRANSLATION_MAP.copy()
+
+def save_term_translation_map(config):
+    """Save term translation map to file"""
+    try:
+        with open(TERM_TRANSLATION_FILE, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+        print(f"[CONFIG] Saved term translation map to {TERM_TRANSLATION_FILE}", flush=True)
+    except Exception as e:
+        print(f"[CONFIG] Error saving term translation map: {e}", flush=True)
+
+TERM_TRANSLATION_MAP = load_term_translation_map()
+
+def build_term_translation_prompt() -> str:
+    """Build a system prompt fragment from the term translation map"""
+    if not TERM_TRANSLATION_MAP.get("enabled", False):
+        return ""
+    terms = TERM_TRANSLATION_MAP.get("terms", {})
+    if not terms:
+        return ""
+    lines = [f"{src} → {tgt}" for src, tgt in terms.items()]
+    return (
+        "\n\n## CRITICAL — Term Translation Rules:\n"
+        "The following terms MUST be translated/used exactly as specified below.\n"
+        "DO NOT use any alternative translations or transliterations for these terms.\n"
+        + "\n".join(f"- {line}" for line in lines)
+    )
+
+def enforce_term_translations(text: str) -> str:
+    """Post-process text to enforce term translations (hard constraint)"""
+    if not TERM_TRANSLATION_MAP.get("enabled", False):
+        return text
+    terms = TERM_TRANSLATION_MAP.get("terms", {})
+    if not terms:
+        return text
+    result = text
+    for src, tgt in terms.items():
+        result = result.replace(src, tgt)
+    return result
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -1008,6 +1074,11 @@ async def generate_with_llm(prompt: str, system_prompt: str, llm_config: Optiona
                      enough room for the target output length. Helps prevent
                      truncation before the model completes naturally.
     """
+    # Inject term translation constraints into system prompt
+    term_prompt = build_term_translation_prompt()
+    if term_prompt:
+        system_prompt += term_prompt
+    
     # Determine provider and config
     if llm_config:
         print(f"[LLM] llm_config is not None", flush=True)
@@ -1519,7 +1590,11 @@ Polished Chinese content here."""
                 print(f"[VERIFY] Faithful mode: verification issues found but skipped retry: {verification['issues']}", flush=True)
         
         # Use modified content if sensitive words were auto-replaced
-        final_content = verification.get('modified_content') or clean_content
+        base_content = verification.get('modified_content') or clean_content
+        # Enforce term translations (hard constraint)
+        final_content = enforce_term_translations(base_content)
+        if final_content != base_content:
+            print(f"[TERM] Term translations enforced on final content", flush=True)
         
         # Stream the final content once, after all processing is done
         yield send_progress("generating", "正在输出文章...", 90)
@@ -1738,6 +1813,67 @@ async def reset_sensitive_words():
         "success": True,
         "message": "已重置为默认配置"
     }
+
+# ============== Term Translation Map Endpoints ==============
+
+class TermTranslationMapUpdate(BaseModel):
+    enabled: bool
+
+class TermEntry(BaseModel):
+    source: str = Field(..., min_length=1)
+    target: str = Field(..., min_length=1)
+
+@app.get("/api/term-translation-map")
+async def get_term_translation_map():
+    """Get the full term translation map"""
+    global TERM_TRANSLATION_MAP
+    return TERM_TRANSLATION_MAP
+
+@app.put("/api/term-translation-map/enabled")
+async def set_term_translation_enabled(update: TermTranslationMapUpdate):
+    """Enable or disable the term translation map"""
+    global TERM_TRANSLATION_MAP
+    TERM_TRANSLATION_MAP["enabled"] = update.enabled
+    save_term_translation_map(TERM_TRANSLATION_MAP)
+    return {"success": True, "enabled": update.enabled}
+
+@app.post("/api/term-translation-map/terms")
+async def add_term_translation(entry: TermEntry):
+    """Add or update a term translation entry"""
+    global TERM_TRANSLATION_MAP
+    TERM_TRANSLATION_MAP.setdefault("terms", {})[entry.source] = entry.target
+    save_term_translation_map(TERM_TRANSLATION_MAP)
+    return {"success": True, "source": entry.source, "target": entry.target}
+
+@app.delete("/api/term-translation-map/terms")
+async def delete_term_translation(source: str):
+    """Delete a term translation entry"""
+    global TERM_TRANSLATION_MAP
+    terms = TERM_TRANSLATION_MAP.get("terms", {})
+    if source in terms:
+        del terms[source]
+        save_term_translation_map(TERM_TRANSLATION_MAP)
+        return {"success": True, "source": source}
+    raise HTTPException(status_code=404, detail=f"Term '{source}' not found")
+
+@app.put("/api/term-translation-map/terms")
+async def update_term_translation(entry: TermEntry):
+    """Update an existing term translation entry"""
+    global TERM_TRANSLATION_MAP
+    terms = TERM_TRANSLATION_MAP.get("terms", {})
+    if entry.source not in terms:
+        raise HTTPException(status_code=404, detail=f"Term '{entry.source}' not found")
+    terms[entry.source] = entry.target
+    save_term_translation_map(TERM_TRANSLATION_MAP)
+    return {"success": True, "source": entry.source, "target": entry.target}
+
+@app.post("/api/term-translation-map/reset")
+async def reset_term_translation_map():
+    """Reset term translation map to defaults"""
+    global TERM_TRANSLATION_MAP
+    TERM_TRANSLATION_MAP = DEFAULT_TERM_TRANSLATION_MAP.copy()
+    save_term_translation_map(TERM_TRANSLATION_MAP)
+    return {"success": True, "message": "已重置为默认配置"}
 
 @app.get("/api/config")
 async def get_config():
