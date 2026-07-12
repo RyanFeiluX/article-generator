@@ -1,13 +1,7 @@
-# ---- Build base: Python + Node.js (for frontend build & pip install) ----
-FROM nikolaik/python-nodejs:python3.11-nodejs20 AS base
+# ---- Backend dependencies (pip install) ----
+FROM python:3.11-slim AS backend-deps
 
 WORKDIR /app
-
-# Install pnpm version compatible with Node.js 20
-RUN npm install -g --force pnpm@9.12.2
-
-# ---- Backend dependencies (pip install) ----
-FROM base AS backend-deps
 
 COPY backend/requirements.txt /app/backend/
 
@@ -16,9 +10,12 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r /app/backend/requirements.txt
 
 # ---- Frontend build (pnpm build) ----
-FROM base AS frontend-build
+FROM node:20-slim AS frontend-build
 
 WORKDIR /app/frontend
+
+# Install pnpm version compatible with Node.js 20
+RUN npm install -g --force pnpm@9.12.2
 
 COPY frontend/package.json frontend/pnpm-lock.yaml* ./
 

@@ -16,6 +16,7 @@ interface StoredState {
   generatedContent: string;
   topic: string;
   style: string;
+  length: string;
   useSearch: boolean;
 }
 
@@ -34,6 +35,7 @@ interface UseArticleGeneratorReturn {
   error: string | null;
   topic: string;
   style: string;
+  length: string;
   useSearch: boolean;
   addSnippet: (content: string, source?: string) => void;
   removeSnippet: (id: string) => void;
@@ -44,6 +46,7 @@ interface UseArticleGeneratorReturn {
   reset: () => void;
   setTopic: (topic: string) => void;
   setStyle: (style: string) => void;
+  setLength: (length: string) => void;
   setUseSearch: (useSearch: boolean) => void;
 }
 
@@ -81,6 +84,7 @@ export function useArticleGenerator({ llmConfig, tavilyApiKey }: UseArticleGener
   // Settings
   const [topic, setTopic] = useState((storedState?.topic === 'null' || storedState?.topic === null) ? '' : storedState?.topic || '');
   const [style, setStyle] = useState(storedState?.style || 'informative');
+  const [length, setLength] = useState(storedState?.length || 'standard');
   const [useSearch, setUseSearch] = useState(storedState?.useSearch ?? true);
   
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -94,9 +98,10 @@ export function useArticleGenerator({ llmConfig, tavilyApiKey }: UseArticleGener
       generatedContent,
       topic,
       style,
+      length,
       useSearch
     });
-  }, [snippets, generatedTitle, generatedContent, topic, style, useSearch]);
+  }, [snippets, generatedTitle, generatedContent, topic, style, length, useSearch]);
 
   const addSnippet = useCallback((content: string, source?: string) => {
     const newSnippet: Snippet = {
@@ -129,6 +134,7 @@ export function useArticleGenerator({ llmConfig, tavilyApiKey }: UseArticleGener
     setError(null);
     setTopic('');
     setStyle('informative');
+    setLength('standard');
     setUseSearch(true);
     localStorage.removeItem(STORAGE_KEY);
   }, []);
@@ -181,6 +187,7 @@ export function useArticleGenerator({ llmConfig, tavilyApiKey }: UseArticleGener
       snippets: validSnippets.map(s => ({ content: s.content.trim(), source: s.source?.trim() || undefined })),
       topic: topic.trim() || undefined,
       style,
+      length,
       use_search: useSearch,
       max_search_results: 5,
       tavily_api_key: tavilyApiKey || undefined,
@@ -298,6 +305,7 @@ export function useArticleGenerator({ llmConfig, tavilyApiKey }: UseArticleGener
     error,
     topic,
     style,
+    length,
     useSearch,
     addSnippet,
     removeSnippet,
@@ -308,6 +316,7 @@ export function useArticleGenerator({ llmConfig, tavilyApiKey }: UseArticleGener
     reset,
     setTopic,
     setStyle,
+    setLength,
     setUseSearch
   };
 }

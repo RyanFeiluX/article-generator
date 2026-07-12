@@ -260,12 +260,35 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 
 # Constants for content verification
-MIN_ARTICLE_LENGTH = 3000  # Minimum characters for a substantive article
 MAX_DUPLICATION_RATIO = 0.25  # Maximum allowed duplication ratio
-MIN_SENTENCE_COUNT = 8  # Minimum sentences for logical flow check
 MAX_RETRY_ATTEMPTS = 3  # Maximum retry attempts on verification failure
 MAX_TRUNCATION_RETRIES = 3  # Maximum retries on LLM output truncation
 MAX_TOKENS_CEILING = 32768  # Absolute max_tokens cap across all providers
+
+# Length options: key -> (target_char, min_chars, min_sentences, target_multiplier, prompt_label_zh)
+LENGTH_OPTIONS = {
+    "micro":         {"min_chars": 800,   "max_chars": 1200,  "min_sentences": 4,  "target_multiplier": 1.0, "prompt_label": "简要摘要"},
+    "short":         {"min_chars": 2000,  "max_chars": 3000,  "min_sentences": 6,  "target_multiplier": 1.0, "prompt_label": "简短文章"},
+    "standard":      {"min_chars": 3500,  "min_sentences": 8,  "target_multiplier": 2.0, "prompt_label": "标准文章"},
+    "detailed":      {"min_chars": 6000,  "min_sentences": 12, "target_multiplier": 2.5, "prompt_label": "详细文章"},
+    "comprehensive": {"min_chars": 10000, "min_sentences": 16, "target_multiplier": 3.0, "prompt_label": "深度文章"},
+}
+
+# Style options with Chinese label and prompt guidance
+STYLE_OPTIONS = {
+    "informative": {"label_zh": "资讯型", "label_en": "Informative",
+                    "prompt": "客观专业，信息密度高，使用数据驱动的事实性语言"},
+    "casual":      {"label_zh": "休闲型", "label_en": "Casual",
+                    "prompt": "轻松自然，口语化表达，读起来像朋友间的对话"},
+    "formal":      {"label_zh": "正式型", "label_en": "Formal",
+                    "prompt": "严谨规范，使用正式的学术或公文风格的措辞"},
+    "narrative":   {"label_zh": "故事型", "label_en": "Narrative",
+                    "prompt": "叙事驱动，通过场景、案例和故事化手法吸引读者"},
+    "technical":   {"label_zh": "技术型", "label_en": "Technical",
+                    "prompt": "专业术语准确，逻辑严密，适合技术分析和教程"},
+    "opinion":     {"label_zh": "评论型", "label_en": "Opinion",
+                    "prompt": "观点鲜明，有论点论据和说服力，适合社评和分析"},
+}
 
 
 class TruncationError(Exception):
@@ -868,6 +891,7 @@ class ArticleRequest(BaseModel):
     snippets: List[SnippetInput] = Field(..., min_length=1, max_length=20)
     topic: Optional[str] = Field(None)
     style: Optional[str] = Field("informative")
+    length: Optional[str] = Field("standard")
     use_search: bool = Field(True)
     max_search_results: int = Field(5, ge=1, le=10)
     tavily_api_key: Optional[str] = Field(None)
@@ -885,14 +909,15 @@ class SearchResult(BaseModel):
     site: str
 
 
-def compute_target_length(snippets: List[SnippetInput]) -> int:
-    """Compute the target article length dynamically based on input size.
-    
-    The output must be at least max(MIN_ARTICLE_LENGTH, 2x total input chars).
-    This ensures short snippets get substantial supplementation.
-    """
+def compute_target_length(snippets: List[SnippetInput], length: str = "standard") -> int:
+    """Compute the target article length dynamically based on input size and length option."""
+    cfg = LENGTH_OPTIONS.get(length, LENGTH_OPTIONS["standard"])
     total_input_chars = sum(len(s.content) for s in snippets)
-    return max(MIN_ARTICLE_LENGTH, total_input_chars * 2)
+    target = max(cfg["min_chars"], int(total_input_chars * cfg["target_multiplier"]))
+    max_chars = cfg.get("max_chars")
+    if max_chars is not None:
+        target = min(target, max_chars)
+    return target
 
 
 # ============== Helper Functions ==============
@@ -989,18 +1014,18 @@ def check_logical_flow(text: str) -> dict:
     }
 
 
-def check_size_constraints(text: str) -> dict:
+def check_size_constraints(text: str, min_chars: int = 3000) -> dict:
     char_count = len(text)
     word_count = len(text.split())
     
     return {
         'char_count': char_count,
         'word_count': word_count,
-        'meets_minimum': char_count >= MIN_ARTICLE_LENGTH
+        'meets_minimum': char_count >= min_chars
     }
 
 
-def verify_content_internal(content: str) -> dict:
+def verify_content_internal(content: str, min_chars: int = 3000, min_sentences: int = 8) -> dict:
     issues = []
     score = 100.0
     modified_content = content
@@ -1016,9 +1041,9 @@ def verify_content_internal(content: str) -> dict:
             # Reduced penalty since we're auto-correcting
             score -= 5
     
-    size_check = check_size_constraints(modified_content)
+    size_check = check_size_constraints(modified_content, min_chars)
     if not size_check['meets_minimum']:
-        issues.append(f"文章过短 (仅 {size_check['char_count']} 字符，需要至少 {MIN_ARTICLE_LENGTH})")
+        issues.append(f"文章过短 (仅 {size_check['char_count']} 字符，需要至少 {min_chars})")
         score -= 25
     
     dup_ratio = check_duplication(modified_content)
@@ -1033,7 +1058,7 @@ def verify_content_internal(content: str) -> dict:
     
     flow_check = check_logical_flow(modified_content)
     flow_score = 0
-    if flow_check['sentence_count'] >= MIN_SENTENCE_COUNT:
+    if flow_check['sentence_count'] >= min_sentences:
         flow_score += 25
     if flow_check['has_intro']:
         flow_score += 10
@@ -1222,10 +1247,85 @@ async def extract_title_and_content(text: str) -> tuple:
     return title, content
 
 
-async def improve_article(current_content: str, issues: List[str], style: str, llm_config: Optional[LLMConfig] = None, safe_max_tokens: Optional[int] = None) -> str:
+async def improve_article(current_content: str, issues: List[str], style: str, llm_config: Optional[LLMConfig] = None, safe_max_tokens: Optional[int] = None, min_chars: int = 3000, length: str = "standard") -> str:
     issues_text = "\n".join([f"- {issue}" for issue in issues])
+    style_prompt = STYLE_OPTIONS.get(style, STYLE_OPTIONS["informative"])["prompt"]
+    is_concise = length in ("micro", "short")
     
-    improvement_prompt = f"""## Task: Improve Article Quality (EXPANSION ONLY — No Shrinking)
+    if is_concise:
+        has_length_issue = any("过短" in issue for issue in issues)
+        if has_length_issue:
+            improvement_prompt = f"""## Task: Improve Article Quality (CONCISE — Expand to Reach Length)
+
+The article is too short. Please expand it to approximately {min_chars} characters while preserving all original information.
+
+## Issues to Fix:
+{issues_text}
+
+## Current Article:
+{current_content}
+
+## Improvement Requirements:
+1. **Expand to Target**: The article needs more content to reach approximately {min_chars} characters. Add relevant detail, explanation, or context based on existing information.
+2. **Preserve Core Information**: Keep all original content — do not delete anything.
+3. **Fix Identified Issues**: Address the specific problems listed above.
+4. **Enhance Logical Coherence**: Strengthen transitions for smoother flow.
+5. **Style**: {style_prompt}
+6. **Avoid Repetition**: Add fresh content, not repeated phrases.
+7. **Ensure Fluency**: Use natural, fluent Chinese expression.
+8. **Chinese Only**: Entire article must be in Chinese.
+
+## CRITICAL — Strict Output Format:
+- Start DIRECTLY with `[Title]` — no preamble, no explanations, no conversational text.
+- `[Title]` must contain ONLY a short title (10-20 Chinese characters) on ONE line.
+- `[Content]` MUST appear on a new line after the title.
+- Never put article body text inside the [Title] line.
+
+Output Format (follow EXACTLY):
+[Title]
+Chinese Title (10-20 characters, single line)
+
+[Content]
+Improved Chinese content here."""
+
+            improve_system = "You are a professional editor who expands articles to meet length requirements while preserving quality and conciseness."
+        else:
+            improvement_prompt = f"""## Task: Improve Article Quality (CONCISE — Polish Only)
+
+Please improve the following article to address the identified issues. Keep the length roughly the same.
+
+## Issues to Fix:
+{issues_text}
+
+## Current Article:
+{current_content}
+
+## Improvement Requirements:
+1. **Keep Concise**: Do NOT expand the article. Fix issues by improving existing content.
+2. **Preserve Core Information**: Keep the main ideas and key information from the original.
+3. **Fix Identified Issues**: Address the specific problems listed above by improving clarity and flow.
+4. **Enhance Logical Coherence**: Strengthen transitions for smoother flow.
+5. **Style**: {style_prompt}
+6. **Avoid Repetition**: Remove or rephrase repetitive sections.
+7. **Ensure Fluency**: Use natural, fluent Chinese expression.
+8. **Chinese Only**: Entire article must be in Chinese.
+
+## CRITICAL — Strict Output Format:
+- Start DIRECTLY with `[Title]` — no preamble, no explanations, no conversational text.
+- `[Title]` must contain ONLY a short title (10-20 Chinese characters) on ONE line.
+- `[Content]` MUST appear on a new line after the title.
+- Never put article body text inside the [Title] line.
+
+Output Format (follow EXACTLY):
+[Title]
+Chinese Title (10-20 characters, single line)
+
+[Content]
+Improved Chinese content here."""
+
+            improve_system = "You are a professional editor who fixes issues by refining content — never by expanding it."
+    else:
+        improvement_prompt = f"""## Task: Improve Article Quality (EXPANSION ONLY — No Shrinking)
 
 Please improve the following article to address the identified issues. CRITICAL: You must ONLY expand and enhance the article — NEVER shorten, summarize, or remove content.
 
@@ -1240,8 +1340,8 @@ Please improve the following article to address the identified issues. CRITICAL:
 2. **Preserve Core Information**: Keep the main ideas and key information from the original — do not delete meaningful content
 3. **Fix Identified Issues**: Address the specific problems listed above by adding better transitions, explanations, and structure
 4. **Enhance Logical Coherence**: Strengthen transitions between paragraphs for smoother flow by adding connective content
-5. **Maintain Consistent Style**: Keep the {style} writing style throughout
-6. **Expand Content**: If the article is below {MIN_ARTICLE_LENGTH} characters, expand existing sections with additional details, examples, or explanations
+5. **Style**: {style_prompt}
+6. **Expand Content**: If the article is below {min_chars} characters, expand existing sections with additional details, examples, or explanations
 7. **Avoid Repetition**: If content is repetitive, replace repeated sections with fresh, informative content rather than simply deleting
 8. **Ensure Fluency**: Use natural, fluent Chinese expression
 9. **Chinese Only**: Entire article must be in Chinese
@@ -1259,8 +1359,10 @@ Chinese Title (10-20 characters, single line)
 [Content]
 Improved Chinese content here."""
 
+        improve_system = "You are a professional article editor who fixes issues by enriching and expanding content — never by shrinking or removing it."
+
     print(f"[LLM] Calling generate_with_llm for improvement retry with provider: {llm_config.provider if llm_config else 'volc'}", flush=True)
-    return await generate_with_llm(improvement_prompt, "You are a professional article editor who fixes issues by enriching and expanding content — never by shrinking or removing it.", llm_config, safe_max_tokens)
+    return await generate_with_llm(improvement_prompt, improve_system, llm_config, safe_max_tokens)
 
 
 async def search_tavily(query: str, api_key: str, max_results: int = 5) -> List[SearchResult]:
@@ -1368,6 +1470,7 @@ async def generate_article_stream(
     snippets: List[SnippetInput],
     topic: Optional[str],
     style: str,
+    length: str,
     use_search: bool,
     max_search_results: int,
     tavily_api_key: Optional[str] = None,
@@ -1405,9 +1508,15 @@ async def generate_article_stream(
         else:
             yield send_progress("generating", "正在合并文本片段...", 20)
         
-        # Compute dynamic target length (only used when search is enabled)
-        target_len = compute_target_length(snippets)
+        # Compute dynamic target length based on length option
+        length_cfg = LENGTH_OPTIONS.get(length, LENGTH_OPTIONS["standard"])
+        target_len = compute_target_length(snippets, length)
         total_input = sum(len(s.content) for s in snippets)
+        min_chars = length_cfg["min_chars"]
+        min_sentences = length_cfg["min_sentences"]
+        prompt_label = length_cfg["prompt_label"]
+        style_prompt = STYLE_OPTIONS.get(style, STYLE_OPTIONS["informative"])["prompt"]
+        is_concise = length in ("micro", "short")
         
         # Compute safe max_tokens to prevent output truncation
         # Chinese content ~1.5-2 chars/token; use 1.2 as a safe estimate
@@ -1415,6 +1524,8 @@ async def generate_article_stream(
         if llm_config and llm_config.config and hasattr(llm_config.config, 'maxTokens') and llm_config.config.maxTokens:
             user_max_tokens = llm_config.config.maxTokens
         safe_max_tokens = min(max(user_max_tokens, int(target_len * 1.2)), MAX_TOKENS_CEILING)
+        if is_concise:
+            safe_max_tokens = min(safe_max_tokens, max(2048, int(target_len * 2.5)))
         if safe_max_tokens > user_max_tokens:
             print(f"[LENGTH] Computed safe_max_tokens={safe_max_tokens} (target_len={target_len}, user_max={user_max_tokens})", flush=True)
         
@@ -1429,16 +1540,27 @@ async def generate_article_stream(
         
         # Select prompt based on whether web search is enabled
         if use_search:
-            combine_prompt = f"""## Text Snippets:
-{snippets_text}
+            combine_task = {
+                "micro": "Write a CONCISE SUMMARY of approximately {target_len} characters, distilling only the most essential points. Aim for 3-5 paragraphs.",
+                "short": "Write a COMPACT article of approximately {target_len} characters, keeping it focused and to the point. Aim for 4-6 paragraphs.",
+                "standard": "Create a SUBSTANTIVE article of at least {target_len} characters. Expand with well-developed content. Aim for 5-8 paragraphs.",
+                "detailed": "Write a DETAILED article of at least {target_len} characters. Include thorough analysis and supporting details. Aim for 8-12 paragraphs.",
+                "comprehensive": "Write a COMPREHENSIVE, IN-DEPTH article of at least {target_len} characters. Provide exhaustive analysis, examples, and context. Aim for 12+ paragraphs.",
+            }.get(length, "Create a SUBSTANTIVE article of at least {target_len} characters.").format(target_len=target_len)
 
-## Topic: {topic or 'Comprehensive article based on text snippets'}
-## Target: At least {target_len} characters (input is {total_input} chars — add ~{target_len - total_input} chars of supplementary content)
-{search_context}
-
-## Task: Create a SUBSTANTIVE article by combining snippets AND the web search results above. EXPAND, never shrink.
-
-## Requirements:
+            if is_concise:
+                combine_reqs = f"""## Requirements:
+1. **Concise**: Condense and distill — removing redundancy and non-essential details is expected.
+2. **Use Web Results**: Incorporate relevant facts and context from the web search results.
+3. **Focus**: Keep the article tight and focused on the most essential information only.
+4. **Length**: Aim for approximately {target_len} characters. Each paragraph should be around 200-300 characters.
+5. **Coherence**: All content must form a unified narrative with smooth transitions.
+6. **Structure**: Brief introduction, tight body, concise conclusion.
+7. **Engaging title**: 10-20 Chinese characters reflecting the core topic.
+8. **Style**: {style_prompt}
+9. **Chinese only**."""
+            else:
+                combine_reqs = f"""## Requirements:
 1. **Anti-Shrink**: Never condense or summarize snippets. All original content must remain and be built upon.
 2. **Use Web Results**: Incorporate facts, context, and data from the web search results to enrich the article.
 3. **Supplement**: Add background context, explanations, examples, analysis, implications, or related concepts based on the snippets and search results.
@@ -1446,7 +1568,19 @@ async def generate_article_stream(
 5. **Coherence**: All content — original, web-sourced, and generated — must form one unified narrative with smooth transitions.
 6. **Structure**: Include introduction, well-developed body, and conclusion.
 7. **Engaging title**: 10-20 Chinese characters reflecting the full scope.
-8. **Chinese only**.
+8. **Style**: {style_prompt}
+9. **Chinese only**."""
+
+            combine_prompt = f"""## Text Snippets:
+{snippets_text}
+
+## Topic: {topic or 'Comprehensive article based on text snippets'}
+## Target: At least {target_len} characters (input is {total_input} chars)
+{search_context}
+
+## Task: {combine_task}
+
+{combine_reqs}
 
 ## CRITICAL — Strict Output Format:
 - Start DIRECTLY with `[Title]` — no preamble, no conversational text, no greetings, no acknowledgments.
@@ -1461,6 +1595,35 @@ Chinese Title (10-20 characters, single line)
 [Content]
 Chinese article content here."""
         else:
+            length_note = {
+                "micro": "Create a concise summary of approximately {target_len} characters. Be brief but complete. Aim for 1-2 paragraphs.",
+                "short": "Create a compact article of approximately {target_len} characters. Keep it focused. Aim for 2-3 paragraphs.",
+                "standard": "Create a well-developed article of at least {target_len} characters. Aim for 5-8 paragraphs.",
+                "detailed": "Create a detailed article of at least {target_len} characters. Expand thoughtfully. Aim for 8-12 paragraphs.",
+                "comprehensive": "Create a comprehensive article of at least {target_len} characters. Cover all aspects thoroughly. Aim for 12+ paragraphs.",
+            }.get(length, "Create a well-developed article of at least {target_len} characters.".format(target_len=target_len))
+
+            if is_concise:
+                combine_rules = f"""## CRITICAL RULES:
+1. **Faithful to source**: Use ONLY the information present in the snippets above. Do NOT add any facts, data, statistics, examples, background context, or explanations that are not explicitly stated in the snippets.
+2. **Length**: {length_note} 
+3. **Concise**: Condense is allowed — remove redundancy while preserving all key information.
+4. **Polish only**: Improve grammar, clarity, organization, and flow — but never invent new content.
+5. **Structure**: Brief intro, tight body, concise conclusion.
+6. **Style**: {style_prompt}
+7. **Engaging title**: 10-20 Chinese characters based strictly on the snippets.
+8. **Chinese only**."""
+            else:
+                combine_rules = f"""## CRITICAL RULES:
+1. **Faithful to source**: Use ONLY the information present in the snippets above. Do NOT add any facts, data, statistics, examples, background context, or explanations that are not explicitly stated in the snippets.
+2. **Length**: {length_note} Only expand by reorganizing and refining existing content — never invent.
+3. **Polish only**: Improve grammar, clarity, organization, and flow — but never invent new content.
+4. **Preserve all original content**: Every piece of information from the snippets must be included. Do not remove or condense.
+5. **Structure**: Organize into introduction, body, and conclusion if the snippets support it.
+6. **Style**: {style_prompt}
+7. **Engaging title**: 10-20 Chinese characters based strictly on the snippets.
+8. **Chinese only**."""
+
             combine_prompt = f"""## Text Snippets:
 {snippets_text}
 
@@ -1468,14 +1631,7 @@ Chinese article content here."""
 
 ## Task: Create a coherent article by combining the provided snippets ONLY.
 
-## CRITICAL RULES:
-1. **Faithful to source**: Use ONLY the information present in the snippets above. Do NOT add any facts, data, statistics, examples, background context, or explanations that are not explicitly stated in the snippets.
-2. **No padding**: Do not artificially expand the article. The length should reflect the content actually provided.
-3. **Polish only**: Improve grammar, clarity, organization, and flow — but never invent new content.
-4. **Preserve all original content**: Every piece of information from the snippets must be included. Do not remove or condense.
-5. **Structure**: Organize into introduction, body, and conclusion if the snippets support it.
-6. **Engaging title**: 10-20 Chinese characters based strictly on the snippets.
-7. **Chinese only**.
+{combine_rules}
 
 ## CRITICAL — Strict Output Format:
 - Start DIRECTLY with `[Title]` — no preamble, no conversational text, no greetings, no acknowledgments.
@@ -1491,7 +1647,10 @@ Chinese Title (10-20 characters, single line)
 Chinese article content here."""
 
         if use_search:
-            combine_system = "You are an expert article writer who expands brief content into comprehensive articles. Never summarize — always build upon and enrich input."
+            if is_concise:
+                combine_system = "You are a skilled writer who produces concise summaries. Condense and distill — never pad."
+            else:
+                combine_system = "You are an expert article writer who expands brief content into comprehensive articles. Never summarize — always build upon and enrich input."
         else:
             combine_system = "You are an editor who faithfully combines provided text into a coherent article. Do NOT add any information not present in the source snippets."
         print(f"[LLM] Calling generate_with_llm with provider: {llm_config.provider if llm_config else 'volc'}", flush=True)
@@ -1506,17 +1665,18 @@ Chinese article content here."""
         clean_article = f"[Title]\n{title}\n\n[Content]\n{clean_content}"
         
         if use_search:
-            improve_prompt = f"""## Article to Improve:
+            if is_concise:
+                improve_prompt = f"""## Article to Improve:
 {clean_article}
 
-## Target: Produce a polished article of at least {target_len} characters. Never shorten — only enhance and expand.
+## Target: Polish the article to approximately {target_len} characters.
 
 ## Improvement Focus:
-1. **Anti-Shrink**: Do NOT remove or condense any content. Only add, refine, and expand.
+1. **Length Check**: If the article is below {target_len} characters, expand it modestly to reach the target. If already at the target, only polish.
 2. **Smooth flow**: Add transitions between paragraphs and ensure logical progression of ideas.
-3. **Clarity & depth**: Make complex ideas clearer; expand thin sections with examples, context, or explanation.
-4. **Structure**: Ensure clear introduction, well-developed body paragraphs, and a meaningful conclusion.
-5. **Professional tone**: Use precise, professional language in {style} style.
+3. **Clarity**: Make complex ideas clearer.
+4. **Structure**: Keep a tight structure — brief intro, focused body, concise conclusion.
+5. **Style**: {style_prompt}
 6. **Chinese only**.
 
 ## CRITICAL — Strict Output Format:
@@ -1531,7 +1691,34 @@ Chinese Title (10-20 characters, single line)
 
 [Content]
 Improved Chinese content here."""
-            improve_system = "You are a professional article editor. Polish, enrich, and expand content — never shrink or remove it."
+                improve_system = "You are a professional editor who polishes content to the right length. Expand when needed, but don't pad."
+            else:
+                improve_prompt = f"""## Article to Improve:
+{clean_article}
+
+## Target: Produce a polished article of at least {target_len} characters. Never shorten — only enhance and expand.
+
+## Improvement Focus:
+1. **Anti-Shrink**: Do NOT remove or condense any content. Only add, refine, and expand.
+2. **Smooth flow**: Add transitions between paragraphs and ensure logical progression of ideas.
+3. **Clarity & depth**: Make complex ideas clearer; expand thin sections with examples, context, or explanation.
+4. **Structure**: Ensure clear introduction, well-developed body paragraphs, and a meaningful conclusion.
+5. **Style**: {style_prompt}
+6. **Chinese only**.
+
+## CRITICAL — Strict Output Format:
+- Start DIRECTLY with `[Title]` — no preamble, no conversational text, no greetings.
+- `[Title]` must contain ONLY a short title (10-20 Chinese characters) on ONE line.
+- `[Content]` MUST appear on a new line after the title.
+- Never put article body text inside the [Title] line.
+
+Output Format (follow EXACTLY):
+[Title]
+Chinese Title (10-20 characters, single line)
+
+[Content]
+Improved Chinese content here."""
+                improve_system = "You are a professional article editor. Polish, enrich, and expand content — never shrink or remove it."
         else:
             improve_prompt = f"""## Article to Polish:
 {clean_article}
@@ -1542,7 +1729,7 @@ Improved Chinese content here."""
 1. **Faithful to source**: Only improve language and organization. Do NOT add facts, examples, or explanations not already present.
 2. **No expansion**: Keep the length roughly the same as the original. Do not pad or supplement.
 3. **Smooth flow**: Improve transitions and logical progression using existing content only.
-4. **Professional tone**: Use precise, professional language in {style} style.
+4. **Style**: {style_prompt}
 5. **Chinese only**.
 
 ## CRITICAL — Strict Output Format:
@@ -1565,7 +1752,7 @@ Polished Chinese content here."""
         
         # Verify the content (auto-replaces sensitive words if needed)
         yield send_progress("verifying", "正在验证文章质量...", 75)
-        verification = verify_content_internal(clean_content)
+        verification = verify_content_internal(clean_content, min_chars, min_sentences)
         
         # Step 5: Auto-improve on verification failure (only when web search supplements are enabled)
         if use_search:
@@ -1574,10 +1761,10 @@ Polished Chinese content here."""
                 retry_count += 1
                 yield send_progress("improving", f"正在优化文章 (第 {retry_count}/{MAX_RETRY_ATTEMPTS} 次)...", 75 + retry_count * 5)
                 
-                improved = await improve_article(clean_content, verification['issues'], style, llm_config, safe_max_tokens)
+                improved = await improve_article(clean_content, verification['issues'], style, llm_config, safe_max_tokens, min_chars, length)
                 title, clean_content = await extract_title_and_content(improved)
                 
-                verification = verify_content_internal(clean_content)
+                verification = verify_content_internal(clean_content, min_chars, min_sentences)
         else:
             # Faithful mode: only warn about quality issues, don't auto-retry with expansion
             if not verification['passed']:
@@ -1654,6 +1841,7 @@ async def generate_article(request: ArticleRequest):
             snippets=request.snippets,
             topic=topic,
             style=request.style or "informative",
+            length=request.length or "standard",
             use_search=request.use_search,
             max_search_results=request.max_search_results,
             tavily_api_key=request.tavily_api_key,
@@ -1880,10 +2068,9 @@ async def get_config():
             print(f"[CONFIG] Error loading default config: {e}", flush=True)
     
     return {
-        "min_article_length": MIN_ARTICLE_LENGTH,
         "max_duplication_ratio": MAX_DUPLICATION_RATIO,
-        "min_sentence_count": MIN_SENTENCE_COUNT,
-        "available_styles": ["informative", "casual", "formal"],
+        "available_lengths": {k: {"min_chars": v["min_chars"], "max_chars": v.get("max_chars"), "min_sentences": v["min_sentences"]} for k, v in LENGTH_OPTIONS.items()},
+        "available_styles": {k: {"label_zh": v["label_zh"], "label_en": v["label_en"]} for k, v in STYLE_OPTIONS.items()},
         "default_llm_config": default_llm_config
     }
 

@@ -136,6 +136,7 @@ export interface ArticleRequest {
   }>;
   topic?: string;
   style: string;
+  length: string;
   use_search: boolean;
   max_search_results: number;
   tavily_api_key?: string;
