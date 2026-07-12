@@ -131,7 +131,7 @@ sleep 2
 
 # Step 6: Launch container
 echo "[6/7] Launching container..."
-docker run -d \
+docker run -d --restart unless-stopped \
     --name article-generator \
     -p ${PORT}:5000 \
     -e PYTHONUNBUFFERED=1 \

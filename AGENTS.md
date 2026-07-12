@@ -1,41 +1,51 @@
-# 项目上下文
+# Article Generator — Repo Guide
 
-## 技术栈
+## Tech stack
 
-- **核心**: Vite 7, TypeScript, Express
-- **UI**: Tailwind CSS
+- **Backend**: FastAPI (Python 3.11) — `backend/main.py`
+  - Entrypoint: `backend/entrypoint.py` (loads config, starts uvicorn on port 5000)
+- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS — `frontend/src/`
+  - Entry: `frontend/src/main.tsx` → `App.tsx`
+- **Deployment**: Single Docker container (multi-stage build, python:3.11-slim runtime)
+- **No database** — all persistence is `localStorage`
+- **No test framework** detected
 
-## 目录结构
+## Commands
 
-```
-├── scripts/            # 构建与启动脚本
-│   ├── build.sh        # 构建脚本
-│   ├── dev.sh          # 开发环境启动脚本
-│   ├── prepare.sh      # 预处理脚本
-│   └── start.sh        # 生产环境启动脚本
-├── server/             # 服务端逻辑
-│   ├── routes/         # API 路由
-│   ├── server.ts       # Express 服务入口
-│   └── vite.ts         # Vite 中间件集成
-├── src/                # 前端源码
-│   ├── index.css       # 全局样式
-│   ├── index.ts        # 客户端入口
-│   └── main.ts         # 主逻辑
-├── index.html          # 入口 HTML
-├── package.json        # 项目依赖管理
-├── tsconfig.json       # TypeScript 配置
-└── vite.config.ts      # Vite 配置
+```bash
+cd frontend && pnpm dev           # Vite dev server
+cd backend && python main.py      # Backend dev
+pnpm dev                          # scripts/dev.sh: builds frontend then starts backend
+pnpm build                        # scripts/build.sh: installs deps + builds frontend
+pnpm start                        # scripts/start.sh: production backend (uvicorn)
+pnpm lint                         # eslint (root eslint.config.mjs)
+pnpm ts-check                     # tsc -p tsconfig.json
+docker-compose up --build         # Full stack container
+docker_up.bat / docker_up.sh      # Build + launch with version bump
 ```
 
-## 包管理规范
+## Package manager
 
-**仅允许使用 pnpm** 作为包管理器，**严禁使用 npm 或 yarn**。
-**常用命令**：
-- 安装依赖：`pnpm add <package>`
-- 安装开发依赖：`pnpm add -D <package>`
-- 安装所有依赖：`pnpm install`
-- 移除依赖：`pnpm remove <package>`
+**pnpm only** — enforced by `"preinstall": "npx only-allow pnpm"`. Never use npm or yarn.
 
-## 开发规范
+## Architecture notes
 
-- 使用 Tailwind CSS 进行样式开发
+- Backend serves frontend static files (`frontend/dist/`) in production. In dev, Vite proxies or you run them separately.
+- All content is **Chinese-first** (zh-CN default in `index.html`). i18next for EN/ZH switching.
+- **7 LLM providers**: volc (default, ARK), openai, azure, anthropic, deepseek, kimi, custom
+  - Default model is `doubao-pro` (Volc Engine); configured in `backend/default_config.json`
+  - Config is also settable from the frontend (saved to `localStorage`)
+- **Content verification pipeline**: generate → extract title/content → improve → verify → auto-retry up to 3× → replace sensitive words → enforce term translations
+- **Web search**: Tavily API (needs key; primary) or DuckDuckGo (free fallback, no key needed)
+- **Streaming**: SSE from `POST /api/generate` to frontend progress panel
+- **Sensitive word filtering** in `backend/sensitive_words_config.json` (5 categories, per-word replacements)
+- **Term translation map** in `backend/term_translation_map.json` (English→Chinese hard replacements)
+
+## Important gotchas
+
+- `VERSION` file at root (currently `0.3.5`) — Docker build reads it for image tagging
+- Backend port is **5000** everywhere (uvicorn, Docker, vite config proxy)
+- Root `src/` directory is stale/unused; real frontend is in `frontend/src/`
+- Root `tsconfig.json` includes `"src"` but actual frontend TS config is `frontend/tsconfig.json`
+- No `__init__.py` needed — backend is a flat module
+- `pnpm build` runs `tsc && vite build` in frontend — TypeScript errors will fail the build
