@@ -1014,18 +1014,19 @@ def check_logical_flow(text: str) -> dict:
     }
 
 
-def check_size_constraints(text: str, min_chars: int = 3000) -> dict:
+def check_size_constraints(text: str, min_chars: int = 3000, max_chars: Optional[int] = None) -> dict:
     char_count = len(text)
     word_count = len(text.split())
     
     return {
         'char_count': char_count,
         'word_count': word_count,
-        'meets_minimum': char_count >= min_chars
+        'meets_minimum': char_count >= min_chars,
+        'within_maximum': max_chars is None or char_count <= max_chars
     }
 
 
-def verify_content_internal(content: str, min_chars: int = 3000, min_sentences: int = 8) -> dict:
+def verify_content_internal(content: str, min_chars: int = 3000, min_sentences: int = 8, max_chars: Optional[int] = None) -> dict:
     issues = []
     score = 100.0
     modified_content = content
@@ -1041,9 +1042,12 @@ def verify_content_internal(content: str, min_chars: int = 3000, min_sentences: 
             # Reduced penalty since we're auto-correcting
             score -= 5
     
-    size_check = check_size_constraints(modified_content, min_chars)
+    size_check = check_size_constraints(modified_content, min_chars, max_chars)
     if not size_check['meets_minimum']:
         issues.append(f"文章过短 (仅 {size_check['char_count']} 字符，需要至少 {min_chars})")
+        score -= 25
+    if not size_check['within_maximum']:
+        issues.append(f"文章过长 (共 {size_check['char_count']} 字符，上限 {max_chars})")
         score -= 25
     
     dup_ratio = check_duplication(modified_content)
@@ -1752,7 +1756,7 @@ Polished Chinese content here."""
         
         # Verify the content (auto-replaces sensitive words if needed)
         yield send_progress("verifying", "正在验证文章质量...", 75)
-        verification = verify_content_internal(clean_content, min_chars, min_sentences)
+        verification = verify_content_internal(clean_content, min_chars, min_sentences, length_cfg.get("max_chars"))
         
         # Step 5: Auto-improve on verification failure (only when web search supplements are enabled)
         if use_search:
@@ -1764,7 +1768,7 @@ Polished Chinese content here."""
                 improved = await improve_article(clean_content, verification['issues'], style, llm_config, safe_max_tokens, min_chars, length)
                 title, clean_content = await extract_title_and_content(improved)
                 
-                verification = verify_content_internal(clean_content, min_chars, min_sentences)
+                verification = verify_content_internal(clean_content, min_chars, min_sentences, length_cfg.get("max_chars"))
         else:
             # Faithful mode: only warn about quality issues, don't auto-retry with expansion
             if not verification['passed']:
@@ -1777,22 +1781,29 @@ Polished Chinese content here."""
         if final_content != base_content:
             print(f"[TERM] Term translations enforced on final content", flush=True)
         
-        # Step 6: Final length scaling — use a lightweight LLM call to fit within target range
+        # Step 6: Final length scaling — retry up to 3 times to fit within target range
         scale_min = length_cfg["min_chars"]
         scale_max = length_cfg.get("max_chars")
         content_len = len(final_content)
-        needs_expand = content_len < int(scale_min * 0.8)
-        needs_condense = scale_max is not None and content_len > int(scale_max * 1.2)
+        needs_expand = content_len < scale_min
+        needs_condense = scale_max is not None and content_len > scale_max
+        scale_retries = 0
+        MAX_SCALE_RETRIES = 2  # additional retries after the first attempt
         
-        if needs_expand or needs_condense:
+        while (needs_expand or needs_condense) and scale_retries <= MAX_SCALE_RETRIES:
             range_desc = f"{scale_min}~{scale_max}" if scale_max else f"{scale_min}+"
             direction = "expand" if needs_expand else "condense"
-            yield send_progress("improving", f"正在调整文章篇幅 ({content_len}→{range_desc}字)...", 87)
+            yield send_progress("improving", f"正在调整文章篇幅 ({len(final_content)}→{range_desc}字)...", 87)
+            
+            if scale_retries == 0:
+                retry_note = ""
+            else:
+                retry_note = f"\n## Previous attempt produced {len(final_content)} characters, still needs adjustment. Be more aggressive."
             
             if direction == "expand":
                 scale_prompt = f"""## Task: Expand the Following Article
 
-The article below is {content_len} Chinese characters. It needs to reach at least {scale_min} characters.
+The article below is {len(final_content)} Chinese characters. It needs to reach at least {scale_min} characters.
 
 ## Current Article:
 [Title]
@@ -1805,6 +1816,7 @@ The article below is {content_len} Chinese characters. It needs to reach at leas
 2. Preserve ALL original information and the original title.
 3. Style: {style_prompt}
 4. Chinese only.
+{retry_note}
 
 ## CRITICAL — Strict Output Format:
 - Start DIRECTLY with `[Title]` — no preamble, no conversational text, no greetings.
@@ -1820,7 +1832,7 @@ Expanded content here."""
             else:
                 scale_prompt = f"""## Task: Condense the Following Article
 
-The article below is {content_len} Chinese characters. It needs to be at most {scale_max} characters.
+The article below is {len(final_content)} Chinese characters. It needs to be at most {scale_max} characters.
 
 ## Current Article:
 [Title]
@@ -1833,6 +1845,7 @@ The article below is {content_len} Chinese characters. It needs to be at most {s
 2. Preserve ALL key information and the original title.
 3. Style: {style_prompt}
 4. Chinese only.
+{retry_note}
 
 ## CRITICAL — Strict Output Format:
 - Start DIRECTLY with `[Title]` — no preamble, no conversational text, no greetings.
@@ -1852,11 +1865,19 @@ Condensed content here."""
             new_title, new_content = await extract_title_and_content(scaled)
             if new_content and len(new_content) > 100:
                 title, final_content = new_title, new_content
-                
+            
             # Re-verify after scaling
+            scale_verification = verify_content_internal(final_content, min_chars, min_sentences, length_cfg.get("max_chars"))
+            if scale_verification.get('modified_content'):
+                final_content = scale_verification['modified_content']
+            final_content = enforce_term_translations(final_content)
+            
             scale_len = len(final_content)
-            in_range = scale_len >= scale_min and (scale_max is None or scale_len <= int(scale_max * 1.15))
-            print(f"[SCALE] After scaling: {content_len} → {scale_len} chars (in range: {in_range})", flush=True)
+            needs_expand = scale_len < scale_min
+            needs_condense = scale_max is not None and scale_len > scale_max
+            in_range = not needs_expand and not needs_condense
+            print(f"[SCALE] Attempt {scale_retries+1}: {content_len} → {scale_len} chars (in range: {in_range})", flush=True)
+            scale_retries += 1
         
         # Stream the final content once, after all processing is done
         yield send_progress("generating", "正在输出文章...", 90)
