@@ -268,10 +268,10 @@ MAX_TOKENS_CEILING = 32768  # Absolute max_tokens cap across all providers
 # Length options: key -> (target_char, min_chars, min_sentences, target_multiplier, prompt_label_zh)
 LENGTH_OPTIONS = {
     "micro":         {"min_chars": 500,   "max_chars": 1200,  "min_sentences": 4,  "target_multiplier": 1.0, "prompt_label": "简要摘要"},
-    "short":         {"min_chars": 1000,  "max_chars": 3500,  "min_sentences": 6,  "target_multiplier": 1.5, "prompt_label": "简短文章"},
-    "standard":      {"min_chars": 2000,  "max_chars": 7000,  "min_sentences": 8,  "target_multiplier": 2.0, "prompt_label": "标准文章"},
-    "detailed":      {"min_chars": 4000,  "max_chars": 12000, "min_sentences": 12, "target_multiplier": 2.5, "prompt_label": "详细文章"},
-    "comprehensive": {"min_chars": 7000,  "min_sentences": 16, "target_multiplier": 3.0, "prompt_label": "深度文章"},
+    "short":         {"min_chars": 1000,  "max_chars": 2500,  "min_sentences": 6,  "target_multiplier": 1.5, "prompt_label": "简短文章"},
+    "standard":      {"min_chars": 2000,  "max_chars": 4000,  "min_sentences": 8,  "target_multiplier": 2.0, "prompt_label": "标准文章"},
+    "detailed":      {"min_chars": 3500,  "max_chars": 6500,  "min_sentences": 12, "target_multiplier": 2.5, "prompt_label": "详细文章"},
+    "comprehensive": {"min_chars": 6000,  "min_sentences": 16, "target_multiplier": 3.0, "prompt_label": "深度文章"},
 }
 
 # Style options with Chinese label and prompt guidance
