@@ -267,11 +267,11 @@ MAX_TOKENS_CEILING = 32768  # Absolute max_tokens cap across all providers
 
 # Length options: key -> (target_char, min_chars, min_sentences, target_multiplier, prompt_label_zh)
 LENGTH_OPTIONS = {
-    "micro":         {"min_chars": 800,   "max_chars": 1200,  "min_sentences": 4,  "target_multiplier": 1.0, "prompt_label": "简要摘要"},
-    "short":         {"min_chars": 2000,  "max_chars": 3000,  "min_sentences": 6,  "target_multiplier": 1.0, "prompt_label": "简短文章"},
-    "standard":      {"min_chars": 3500,  "min_sentences": 8,  "target_multiplier": 2.0, "prompt_label": "标准文章"},
-    "detailed":      {"min_chars": 6000,  "min_sentences": 12, "target_multiplier": 2.5, "prompt_label": "详细文章"},
-    "comprehensive": {"min_chars": 10000, "min_sentences": 16, "target_multiplier": 3.0, "prompt_label": "深度文章"},
+    "micro":         {"min_chars": 500,   "max_chars": 1200,  "min_sentences": 4,  "target_multiplier": 1.0, "prompt_label": "简要摘要"},
+    "short":         {"min_chars": 1000,  "max_chars": 3500,  "min_sentences": 6,  "target_multiplier": 1.5, "prompt_label": "简短文章"},
+    "standard":      {"min_chars": 2000,  "max_chars": 7000,  "min_sentences": 8,  "target_multiplier": 2.0, "prompt_label": "标准文章"},
+    "detailed":      {"min_chars": 4000,  "max_chars": 12000, "min_sentences": 12, "target_multiplier": 2.5, "prompt_label": "详细文章"},
+    "comprehensive": {"min_chars": 7000,  "min_sentences": 16, "target_multiplier": 3.0, "prompt_label": "深度文章"},
 }
 
 # Style options with Chinese label and prompt guidance
@@ -1541,8 +1541,8 @@ async def generate_article_stream(
         # Select prompt based on whether web search is enabled
         if use_search:
             combine_task = {
-                "micro": "Write a CONCISE SUMMARY of approximately {target_len} characters, distilling only the most essential points. Aim for 3-5 paragraphs.",
-                "short": "Write a COMPACT article of approximately {target_len} characters, keeping it focused and to the point. Aim for 4-6 paragraphs.",
+                "micro": "Write a CONCISE SUMMARY of approximately {target_len} characters, distilling only the most essential points. Aim for 2-4 paragraphs.",
+                "short": "Write a COMPACT article of approximately {target_len} characters, keeping it focused and to the point. Aim for 3-6 paragraphs.",
                 "standard": "Create a SUBSTANTIVE article of at least {target_len} characters. Expand with well-developed content. Aim for 5-8 paragraphs.",
                 "detailed": "Write a DETAILED article of at least {target_len} characters. Include thorough analysis and supporting details. Aim for 8-12 paragraphs.",
                 "comprehensive": "Write a COMPREHENSIVE, IN-DEPTH article of at least {target_len} characters. Provide exhaustive analysis, examples, and context. Aim for 12+ paragraphs.",
@@ -1596,8 +1596,8 @@ Chinese Title (10-20 characters, single line)
 Chinese article content here."""
         else:
             length_note = {
-                "micro": "Create a concise summary of approximately {target_len} characters. Be brief but complete. Aim for 1-2 paragraphs.",
-                "short": "Create a compact article of approximately {target_len} characters. Keep it focused. Aim for 2-3 paragraphs.",
+                "micro": "Create a concise summary of approximately {target_len} characters. Be brief but complete. Aim for 2-4 paragraphs.",
+                "short": "Create a compact article of approximately {target_len} characters. Keep it focused. Aim for 3-6 paragraphs.",
                 "standard": "Create a well-developed article of at least {target_len} characters. Aim for 5-8 paragraphs.",
                 "detailed": "Create a detailed article of at least {target_len} characters. Expand thoughtfully. Aim for 8-12 paragraphs.",
                 "comprehensive": "Create a comprehensive article of at least {target_len} characters. Cover all aspects thoroughly. Aim for 12+ paragraphs.",
@@ -1776,6 +1776,87 @@ Polished Chinese content here."""
         final_content = enforce_term_translations(base_content)
         if final_content != base_content:
             print(f"[TERM] Term translations enforced on final content", flush=True)
+        
+        # Step 6: Final length scaling — use a lightweight LLM call to fit within target range
+        scale_min = length_cfg["min_chars"]
+        scale_max = length_cfg.get("max_chars")
+        content_len = len(final_content)
+        needs_expand = content_len < int(scale_min * 0.8)
+        needs_condense = scale_max is not None and content_len > int(scale_max * 1.2)
+        
+        if needs_expand or needs_condense:
+            range_desc = f"{scale_min}~{scale_max}" if scale_max else f"{scale_min}+"
+            direction = "expand" if needs_expand else "condense"
+            yield send_progress("improving", f"正在调整文章篇幅 ({content_len}→{range_desc}字)...", 87)
+            
+            if direction == "expand":
+                scale_prompt = f"""## Task: Expand the Following Article
+
+The article below is {content_len} Chinese characters. It needs to reach at least {scale_min} characters.
+
+## Current Article:
+[Title]
+{title}
+[Content]
+{final_content}
+
+## Requirements:
+1. Expand the article by adding relevant detail, examples, explanation, or context based on existing content.
+2. Preserve ALL original information and the original title.
+3. Style: {style_prompt}
+4. Chinese only.
+
+## CRITICAL — Strict Output Format:
+- Start DIRECTLY with `[Title]` — no preamble, no conversational text, no greetings.
+- `[Title]` must contain ONLY the existing title on ONE line.
+- `[Content]` MUST appear on a new line after the title.
+
+Output Format (follow EXACTLY):
+[Title]
+{title}
+
+[Content]
+Expanded content here."""
+            else:
+                scale_prompt = f"""## Task: Condense the Following Article
+
+The article below is {content_len} Chinese characters. It needs to be at most {scale_max} characters.
+
+## Current Article:
+[Title]
+{title}
+[Content]
+{final_content}
+
+## Requirements:
+1. Condense the article to at most {scale_max} characters by removing redundancy and non-essential details.
+2. Preserve ALL key information and the original title.
+3. Style: {style_prompt}
+4. Chinese only.
+
+## CRITICAL — Strict Output Format:
+- Start DIRECTLY with `[Title]` — no preamble, no conversational text, no greetings.
+- `[Title]` must contain ONLY the existing title on ONE line.
+- `[Content]` MUST appear on a new line after the title.
+
+Output Format (follow EXACTLY):
+[Title]
+{title}
+
+[Content]
+Condensed content here."""
+            
+            scale_max_tokens = min(max(2048, int(scale_max * 1.2 if scale_max else scale_min * 1.2)), MAX_TOKENS_CEILING)
+            scale_system = "You are a professional editor who adjusts article length precisely."
+            scaled = await generate_with_llm(scale_prompt, scale_system, llm_config, scale_max_tokens)
+            new_title, new_content = await extract_title_and_content(scaled)
+            if new_content and len(new_content) > 100:
+                title, final_content = new_title, new_content
+                
+            # Re-verify after scaling
+            scale_len = len(final_content)
+            in_range = scale_len >= scale_min and (scale_max is None or scale_len <= int(scale_max * 1.15))
+            print(f"[SCALE] After scaling: {content_len} → {scale_len} chars (in range: {in_range})", flush=True)
         
         # Stream the final content once, after all processing is done
         yield send_progress("generating", "正在输出文章...", 90)
