@@ -1523,11 +1523,11 @@ async def generate_article_stream(
         is_concise = length in ("micro", "short")
         
         # Compute safe max_tokens to prevent output truncation
-        # Chinese content ~1.5-2 chars/token; use 1.2 as a safe estimate
+        # Chinese content ~1.5-2 chars/token; measured ratio ~2.0 in practice
         user_max_tokens = 4096
         if llm_config and llm_config.config and hasattr(llm_config.config, 'maxTokens') and llm_config.config.maxTokens:
             user_max_tokens = llm_config.config.maxTokens
-        safe_max_tokens = min(max(user_max_tokens, int(target_len * 1.2)), MAX_TOKENS_CEILING)
+        safe_max_tokens = min(max(user_max_tokens, int(target_len * 2.0)), MAX_TOKENS_CEILING)
         if is_concise:
             safe_max_tokens = min(safe_max_tokens, max(2048, int(target_len * 2.5)))
         if safe_max_tokens > user_max_tokens:
@@ -1787,8 +1787,23 @@ Polished Chinese content here."""
         content_len = len(final_content)
         needs_expand = content_len < scale_min
         needs_condense = scale_max is not None and content_len > scale_max
+        print(f"[SCALE] Check: content_len={content_len}, scale_min={scale_min}, scale_max={scale_max}, "
+              f"needs_expand={needs_expand}, needs_condense={needs_condense}", flush=True)
+        
+        # Save originals for safety reverts
+        orig_content = final_content
+        orig_title = title
+        orig_in_range = content_len >= scale_min and (scale_max is None or content_len <= scale_max)
+        
+        # Track the best attempt as fallback if all retries fail
+        best_content = orig_content
+        best_title = orig_title
+        best_distance = content_len - scale_max if (needs_condense and scale_max is not None) else (scale_min - content_len if needs_expand else float('inf'))
+        if best_distance < 0:
+            best_distance = 0  # already in range
+        
         scale_retries = 0
-        MAX_SCALE_RETRIES = 2  # additional retries after the first attempt
+        MAX_SCALE_RETRIES = 2
         
         while (needs_expand or needs_condense) and scale_retries <= MAX_SCALE_RETRIES:
             range_desc = f"{scale_min}~{scale_max}" if scale_max else f"{scale_min}+"
@@ -1832,7 +1847,7 @@ Expanded content here."""
             else:
                 scale_prompt = f"""## Task: Condense the Following Article
 
-The article below is {len(final_content)} Chinese characters. It needs to be at most {scale_max} characters.
+The article below is {len(final_content)} Chinese characters. It needs to be between {scale_min} and {scale_max} characters.
 
 ## Current Article:
 [Title]
@@ -1841,7 +1856,7 @@ The article below is {len(final_content)} Chinese characters. It needs to be at 
 {final_content}
 
 ## Requirements:
-1. Condense the article to at most {scale_max} characters by removing redundancy and non-essential details.
+1. Condense the article to between {scale_min} and {scale_max} characters by removing redundancy and non-essential details. Do NOT condense below {scale_min}.
 2. Preserve ALL key information and the original title.
 3. Style: {style_prompt}
 4. Chinese only.
@@ -1859,6 +1874,9 @@ Output Format (follow EXACTLY):
 [Content]
 Condensed content here."""
             
+            # Record pre-call length for safety comparison
+            pre_scale_len = len(final_content)
+            
             scale_max_tokens = min(max(2048, int(scale_max * 1.2 if scale_max else scale_min * 1.2)), MAX_TOKENS_CEILING)
             scale_system = "You are a professional editor who adjusts article length precisely."
             scaled = await generate_with_llm(scale_prompt, scale_system, llm_config, scale_max_tokens)
@@ -1873,11 +1891,45 @@ Condensed content here."""
             final_content = enforce_term_translations(final_content)
             
             scale_len = len(final_content)
+            
+            # Safety: discard scaling result if it made the article worse
+            # Compare against pre-call length, not the original (which may differ after earlier retries)
+            if orig_in_range:
+                print(f"[SCALE] Safety: original was in range but scaling ran ({scale_len} chars), reverting", flush=True)
+                title, final_content = orig_title, orig_content
+                scale_len = len(final_content)
+                break
+            elif direction == "expand" and scale_len < pre_scale_len:
+                print(f"[SCALE] Safety: expand made content shorter ({scale_len} < {pre_scale_len}), reverting", flush=True)
+                title, final_content = orig_title, orig_content
+                scale_len = len(final_content)
+            elif direction == "condense" and scale_len > pre_scale_len:
+                print(f"[SCALE] Safety: condense made content longer ({scale_len} > {pre_scale_len}), reverting", flush=True)
+                title, final_content = orig_title, orig_content
+                scale_len = len(final_content)
+            
             needs_expand = scale_len < scale_min
             needs_condense = scale_max is not None and scale_len > scale_max
             in_range = not needs_expand and not needs_condense
             print(f"[SCALE] Attempt {scale_retries+1}: {content_len} → {scale_len} chars (in range: {in_range})", flush=True)
+            
+            # Track best attempt as fallback
+            if in_range:
+                best_distance = 0
+                best_content, best_title = final_content, title
+            else:
+                dist = (scale_min - scale_len) if needs_expand else ((scale_len - scale_max) if needs_condense else float('inf'))
+                if dist < best_distance:
+                    best_distance = dist
+                    best_content, best_title = final_content, title
+            
             scale_retries += 1
+        
+        # If still out of range after all retries, use the best attempt
+        if needs_expand or needs_condense:
+            if best_distance > 0 and best_content != final_content:
+                print(f"[SCALE] All retries exhausted, using best attempt (distance={best_distance})", flush=True)
+                title, final_content = best_title, best_content
         
         # Stream the final content once, after all processing is done
         yield send_progress("generating", "正在输出文章...", 90)
