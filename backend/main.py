@@ -29,8 +29,8 @@ from fastapi.exceptions import RequestValidationError
 import uvicorn
 import httpx
 
-# Configuration file paths
-CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
+# Configuration file paths (overridable via CONFIG_DIR env var for Docker volumes)
+CONFIG_DIR = os.environ.get("CONFIG_DIR") or os.path.dirname(os.path.abspath(__file__))
 SENSITIVE_WORDS_FILE = os.path.join(CONFIG_DIR, "sensitive_words_config.json")
 TERM_TRANSLATION_FILE = os.path.join(CONFIG_DIR, "term_translation_map.json")
 
@@ -131,12 +131,30 @@ DEFAULT_SENSITIVE_WORDS_CONFIG = {
     }
 }
 
+def merge_new_defaults(existing, defaults):
+    """Recursively merge new keys from defaults into existing config without overwriting values"""
+    merged = {}
+    for k, v in existing.items():
+        if k in defaults and isinstance(v, dict) and isinstance(defaults[k], dict):
+            merged[k] = merge_new_defaults(v, defaults[k])
+        else:
+            merged[k] = v
+    for k, v in defaults.items():
+        if k not in merged:
+            merged[k] = v
+    return merged
+
 def load_sensitive_words_config():
     """Load sensitive words configuration from file, or use defaults if not exists"""
     if os.path.exists(SENSITIVE_WORDS_FILE):
         try:
             with open(SENSITIVE_WORDS_FILE, 'r', encoding='utf-8') as f:
                 config = json.load(f)
+                merged = merge_new_defaults(config, DEFAULT_SENSITIVE_WORDS_CONFIG)
+                if merged != config:
+                    print(f"[CONFIG] Merged new defaults into {SENSITIVE_WORDS_FILE}", flush=True)
+                    save_sensitive_words_config(merged)
+                    return merged
                 print(f"[CONFIG] Loaded sensitive words from {SENSITIVE_WORDS_FILE}", flush=True)
                 return config
         except Exception as e:
@@ -177,6 +195,11 @@ def load_term_translation_map():
         try:
             with open(TERM_TRANSLATION_FILE, 'r', encoding='utf-8') as f:
                 config = json.load(f)
+                merged = merge_new_defaults(config, DEFAULT_TERM_TRANSLATION_MAP)
+                if merged != config:
+                    print(f"[CONFIG] Merged new defaults into {TERM_TRANSLATION_FILE}", flush=True)
+                    save_term_translation_map(merged)
+                    return merged
                 print(f"[CONFIG] Loaded term translation map from {TERM_TRANSLATION_FILE}", flush=True)
                 return config
         except Exception as e:

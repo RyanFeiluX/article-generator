@@ -57,6 +57,14 @@ The selected style is applied throughout both the initial generation and any aut
 | Minimum generated article length | 3,000 characters or 2× total input length (whichever is larger) |
 | Auto-improvement retries | Up to 3 attempts on verification failure |
 
-## Documentation
+## Docker Deployment
+
+```bash
+docker-compose up --build          # docker-compose.yml
+./docker_up.sh                     # Linux/macOS build script
+docker_up.bat                      # Windows build script
+```
+
+All three methods use a **named volume** (`article-generator-data`) to persist server-side configuration (sensitive words, term translations) across container rebuilds. API keys are stored in browser `localStorage` only.
 
 See [docs/INSTALL.md](docs/INSTALL.md) for detailed installation guide.

@@ -135,6 +135,8 @@ docker run -d --restart unless-stopped \
     --name article-generator \
     -p ${PORT}:5000 \
     -e PYTHONUNBUFFERED=1 \
+    -e CONFIG_DIR=/data/config \
+    -v article-generator-data:/data/config \
     "${IMAGE_NAME}:${CURRENT_VERSION}"
 
 if [ $? -ne 0 ]; then

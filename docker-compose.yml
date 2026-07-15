@@ -14,9 +14,10 @@ services:
       - "5000:5000"
     environment:
       - PYTHONUNBUFFERED=1
+      - CONFIG_DIR=/data/config
     volumes:
-      - article-generator-config:/app/backend
+      - article-generator-data:/data/config
     restart: unless-stopped
 
 volumes:
-  article-generator-config:
+  article-generator-data:

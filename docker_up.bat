@@ -132,7 +132,11 @@ if "!FOUND!" equ "true" (
 set "CONTAINER_REMOVED=true"
 :skip_wait
 
-docker run -d --restart unless-stopped --name article-generator -p 5000:5000 -e PYTHONUNBUFFERED=1 article-generator:!CURRENT_VERSION! 2>nul
+docker run -d --restart unless-stopped --name article-generator -p 5000:5000 ^
+    -e PYTHONUNBUFFERED=1 ^
+    -e CONFIG_DIR=/data/config ^
+    -v article-generator-data:/data/config ^
+    article-generator:!CURRENT_VERSION! 2>nul
 
 set "CONTAINER_CREATED=false"
 for /f "tokens=*" %%i in ('docker ps -a --filter "name=article-generator" --format "{{.Names}}" 2^>^&1') do (

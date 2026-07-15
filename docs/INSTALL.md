@@ -349,20 +349,18 @@ docker run -d \
 
 ### Option B: Build from Source
 
-Clone the repository and build the image locally using docker-compose:
+Clone the repository and build the image locally:
 
 ```bash
 git clone <repository-url>
 cd article-generator
+
+# Using docker-compose (recommended)
 docker-compose up -d
-```
 
-Or use the provided build scripts which auto-increment the version:
-
-```bash
+# Or use the provided build scripts which auto-increment the version:
 # Linux / macOS
 ./docker_up.sh
-
 # Windows
 docker_up.bat
 ```
@@ -376,9 +374,42 @@ docker logs -f article-generator
 # Stop the container
 docker stop article-generator
 
-# Remove the container
+# Remove the container (preserves config volume)
 docker rm article-generator
+
+# Remove container AND config data (irreversible)
+docker rm article-generator && docker volume rm article-generator-data
 ```
+
+## Configuration Persistence
+
+### Docker Volumes
+
+Server-side configuration persists across container rebuilds via a named Docker volume:
+
+| Volume | Mount Path | Persisted Data |
+|--------|-----------|----------------|
+| `article-generator-data` | `/data/config` | Sensitive words, term translation map |
+
+This volume is created automatically on first run. Configuration changes made via the UI (sensitive words, term translations) are saved to this volume and survive image updates.
+
+### Merge on Image Upgrade
+
+When you build and run a newer image, the application automatically **merges** any new default entries into your existing configuration. Your custom words and settings are preserved while new defaults are added.
+
+### What is NOT stored on the server
+
+The following settings are stored **exclusively in your browser's `localStorage`** and are never sent to the server:
+
+- LLM provider selection and API keys
+- Tavily search API key
+- Language preference
+- Session state (snippets, generated content, topic, style, length)
+
+This means:
+- API keys are **never persisted on disk** inside the container
+- Clearing browser data will reset these settings
+- Different browsers on the same machine require independent setup
 
 ## License
 

@@ -57,6 +57,14 @@ pnpm dev
 | 生成文章的最低长度 | 3,000 字符或输入总长度的 2 倍（取较大值） |
 | 自动优化重试次数 | 校验失败时最多重试 3 次 |
 
-## 文档
+## Docker 部署
+
+```bash
+docker-compose up --build          # docker-compose.yml
+./docker_up.sh                     # Linux/macOS 构建脚本
+docker_up.bat                      # Windows 构建脚本
+```
+
+三种部署方式均使用**命名卷**（`article-generator-data`）持久化服务端配置（敏感词、术语翻译），容器重建后配置不丢失。API Key 仅存储在浏览器 `localStorage`。
 
 详细安装指南请参阅 [docs/INSTALL.md](docs/INSTALL.md)。
