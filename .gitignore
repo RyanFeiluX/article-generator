@@ -70,3 +70,5 @@ frontend/public/version.js
 .coze
 .vscode/
 __pycache__/
+plan/
+

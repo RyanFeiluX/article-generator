@@ -100,7 +100,16 @@
     "kimiApiKey": "Kimi API 密钥",
     "searchEngine": "搜索引擎",
     "tavilyApiKey": "Tavily API 密钥",
-    "tavilyHint": "留空则使用 DuckDuckGo（功能有限）。前往 tavily.com 获取免费密钥"
+    "tavilyHint": "留空则使用 DuckDuckGo（功能有限）。前往 tavily.com 获取免费密钥",
+    "apiKeys": "API 密钥",
+    "modelAndParams": "模型与参数",
+    "verifyKey": "验证",
+    "verifying": "验证中...",
+    "keyValid": "API 密钥已验证",
+    "keyInvalid": "API 密钥无效",
+    "keyNotSet": "未验证",
+    "verifyFirst": "请先验证 API 密钥",
+    "networkError": "网络错误"
   },
   "sensitive": {
     "title": "敏感词配置",

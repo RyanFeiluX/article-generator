@@ -100,7 +100,16 @@
     "kimiApiKey": "Kimi API Key",
     "searchEngine": "Search Engine",
     "tavilyApiKey": "Tavily API Key",
-    "tavilyHint": "Leave empty to use DuckDuckGo (limited). Get a free key at tavily.com"
+    "tavilyHint": "Leave empty to use DuckDuckGo (limited). Get a free key at tavily.com",
+    "apiKeys": "API Keys",
+    "modelAndParams": "Model & Parameters",
+    "verifyKey": "Verify",
+    "verifying": "Verifying...",
+    "keyValid": "API Key verified",
+    "keyInvalid": "API Key invalid",
+    "keyNotSet": "Not verified",
+    "verifyFirst": "Please verify your API key first",
+    "networkError": "Network error"
   },
   "sensitive": {
     "title": "Sensitive Words Configuration",

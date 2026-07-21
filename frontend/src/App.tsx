@@ -6,7 +6,7 @@ import { ArticleDisplay } from './components/ArticleDisplay';
 import { SensitiveWordsModal } from './components/SensitiveWordsModal';
 import { TermTranslationModal } from './components/TermTranslationModal';
 import { ConfigModal } from './components/ConfigModal';
-import type { LLMConfig } from './types';
+import type { LLMConfig, ValidatedKeys, LLMProvider } from './types';
 import { DEFAULT_PROVIDER_CONFIGS } from './types';
 import { useArticleGenerator } from './hooks/useArticleGenerator';
 
@@ -64,6 +64,11 @@ function App() {
     return localStorage.getItem('tavily-api-key') || '';
   });
 
+  const [validatedKeys, setValidatedKeys] = useState<ValidatedKeys>(() => {
+    const saved = localStorage.getItem('validated-keys');
+    return saved ? JSON.parse(saved) : {};
+  });
+
   const [showSensitiveWords, setShowSensitiveWords] = useState(false);
   const [showTermTranslation, setShowTermTranslation] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
@@ -76,12 +81,26 @@ function App() {
     localStorage.setItem('tavily-api-key', tavilyApiKey);
   }, [tavilyApiKey]);
 
+  useEffect(() => {
+    localStorage.setItem('validated-keys', JSON.stringify(validatedKeys));
+  }, [validatedKeys]);
+
   const handleConfigChange = (config: LLMConfig) => {
     setLlmConfig(config);
   };
 
   const handleTavilyApiKeyChange = (key: string) => {
     setTavilyApiKey(key);
+  };
+
+  const handleApiKeyChange = (provider: LLMProvider, newKey: string) => {
+    if (validatedKeys[provider] && validatedKeys[provider] !== newKey) {
+      setValidatedKeys(prev => {
+        const next = { ...prev };
+        delete next[provider];
+        return next;
+      });
+    }
   };
 
   const toggleLanguage = () => {
@@ -345,6 +364,9 @@ function App() {
         onConfigChange={handleConfigChange}
         tavilyApiKey={tavilyApiKey}
         onTavilyApiKeyChange={handleTavilyApiKeyChange}
+        validatedKeys={validatedKeys}
+        onValidatedKeysChange={setValidatedKeys}
+        onApiKeyChange={handleApiKeyChange}
       />
     </div>
   );

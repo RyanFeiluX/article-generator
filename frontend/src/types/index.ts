@@ -75,6 +75,25 @@ export interface LLMConfig {
   config: VolcConfig | OpenAIConfig | AzureConfig | AnthropicConfig | DeepSeekConfig | KimiConfig;
 }
 
+// Validated API keys — stores the key string that was successfully verified
+export interface ValidatedKeys {
+  volc?: string;
+  openai?: string;
+  azure?: string;
+  anthropic?: string;
+  deepseek?: string;
+  kimi?: string;
+  custom?: string;
+}
+
+export function isKeyValidated(
+  provider: LLMProvider,
+  apiKey: string,
+  validatedKeys: ValidatedKeys
+): boolean {
+  return !!validatedKeys[provider] && validatedKeys[provider] === apiKey;
+}
+
 // Default provider configs
 export const DEFAULT_PROVIDER_CONFIGS: Record<LLMProvider, any> = {
   volc: {

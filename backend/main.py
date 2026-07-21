@@ -2252,6 +2252,151 @@ async def get_config():
     }
 
 
+# --- API Key Validation ---
+# Simple in-memory rate limiter: {ip: {provider: [timestamps]}}
+_validation_rate_limits: dict = {}
+_VALIDATION_RATE_LIMIT = 5  # max requests per minute per provider
+_VALIDATION_RATE_WINDOW = 60  # seconds
+
+class KeyValidationRequest(BaseModel):
+    provider: str
+    apiKey: str
+    endpoint: Optional[str] = None
+    deploymentName: Optional[str] = None
+    apiVersion: Optional[str] = None
+    baseUrl: Optional[str] = None
+    model: Optional[str] = None
+
+
+def _check_rate_limit(ip: str, provider: str) -> bool:
+    """Returns True if request is allowed."""
+    import time
+    now = time.time()
+    key = f"{ip}:{provider}"
+    if key not in _validation_rate_limits:
+        _validation_rate_limits[key] = []
+    # Prune old entries
+    _validation_rate_limits[key] = [t for t in _validation_rate_limits[key] if now - t < _VALIDATION_RATE_WINDOW]
+    if len(_validation_rate_limits[key]) >= _VALIDATION_RATE_LIMIT:
+        return False
+    _validation_rate_limits[key].append(now)
+    return True
+
+
+@app.post("/api/validate-key")
+async def validate_api_key(req: KeyValidationRequest, request: Request):
+    """Validate an API key by sending a minimal test request to the provider."""
+    client_ip = request.client.host if request.client else "unknown"
+
+    if not _check_rate_limit(client_ip, req.provider):
+        raise HTTPException(status_code=429, detail="Too many validation requests. Please try again later.")
+
+    if not req.apiKey:
+        return {"valid": False, "message": "API key is empty"}
+
+    # Default test models per provider
+    default_models = {
+        "volc": "doubao-pro",
+        "openai": "gpt-4",
+        "anthropic": "claude-3-opus-20240229",
+        "deepseek": "deepseek-v4-flash",
+        "kimi": "kimi-k2.6",
+    }
+
+    test_model = req.model or default_models.get(req.provider, "gpt-4")
+    test_messages = [{"role": "user", "content": "hi"}]
+    test_payload = {
+        "model": test_model,
+        "messages": test_messages,
+        "max_tokens": 1,
+        "stream": False,
+    }
+
+    headers = {"Content-Type": "application/json"}
+    url = None
+
+    try:
+        if req.provider == "volc":
+            url = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+            headers["Authorization"] = f"Bearer {req.apiKey}"
+
+        elif req.provider == "openai":
+            url = "https://api.openai.com/v1/chat/completions"
+            headers["Authorization"] = f"Bearer {req.apiKey}"
+
+        elif req.provider == "azure":
+            if not req.endpoint or not req.deploymentName:
+                return {"valid": False, "message": "Azure requires endpoint and deploymentName"}
+            api_version = req.apiVersion or "2024-02-15-preview"
+            url = f"{req.endpoint.rstrip('/')}/openai/deployments/{req.deploymentName}/chat/completions?api-version={api_version}"
+            headers["api-key"] = req.apiKey
+            # Azure uses different header for auth
+
+        elif req.provider == "anthropic":
+            url = "https://api.anthropic.com/v1/messages"
+            headers["x-api-key"] = req.apiKey
+            headers["anthropic-version"] = "2023-06-01"
+            # Anthropic uses different payload format
+            test_payload = {
+                "model": test_model,
+                "max_tokens": 1,
+                "messages": test_messages,
+            }
+
+        elif req.provider == "deepseek":
+            url = "https://api.deepseek.com/v1/chat/completions"
+            headers["Authorization"] = f"Bearer {req.apiKey}"
+
+        elif req.provider == "kimi":
+            url = "https://api.moonshot.cn/v1/chat/completions"
+            headers["Authorization"] = f"Bearer {req.apiKey}"
+
+        elif req.provider == "custom":
+            if not req.baseUrl:
+                return {"valid": False, "message": "Custom provider requires baseUrl"}
+            url = f"{req.baseUrl.rstrip('/')}/chat/completions"
+            headers["Authorization"] = f"Bearer {req.apiKey}"
+
+        else:
+            return {"valid": False, "message": f"Unknown provider: {req.provider}"}
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(url, headers=headers, json=test_payload)
+
+            # 401/403 = invalid key
+            if response.status_code in (401, 403):
+                return {"valid": False, "message": f"HTTP {response.status_code}: Invalid API key"}
+
+            # 429 = rate limited by provider (key is likely valid)
+            if response.status_code == 429:
+                return {"valid": True, "message": ""}
+
+            # 4xx/5xx other than above = could be model/param issue, but key might be valid
+            # Try to parse response — if it returns JSON, the key is likely valid
+            try:
+                result = response.json()
+            except Exception:
+                return {"valid": False, "message": f"HTTP {response.status_code}: Invalid response"}
+
+            # Check for explicit auth errors in response body
+            if isinstance(result, dict):
+                error = result.get("error", {})
+                if isinstance(error, dict):
+                    error_type = error.get("type", "")
+                    if error_type in ("authentication_error", "invalid_api_key"):
+                        return {"valid": False, "message": error.get("message", "Invalid API key")}
+
+            # If we got here, the key is accepted (even if other params are wrong)
+            return {"valid": True, "message": ""}
+
+    except httpx.ConnectError:
+        return {"valid": False, "message": "Connection failed"}
+    except httpx.TimeoutException:
+        return {"valid": False, "message": "Request timed out"}
+    except Exception as e:
+        return {"valid": False, "message": str(e)}
+
+
 # Mount static files after API endpoints to ensure API routes are prioritized
 if os.path.exists(frontend_dist_path):
     # Serve the entire dist directory to include version.js and other root files
