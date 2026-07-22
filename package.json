@@ -8,17 +8,21 @@
     "preinstall": "npx only-allow pnpm",
     "lint": "eslint",
     "start": "bash ./scripts/start.sh",
-    "ts-check": "tsc -p tsconfig.json"
+    "ts-check": "tsc -p tsconfig.json",
+    "prepare": "husky"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.95.3",
     "dotenv": "^17.2.3"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.1",
+    "@commitlint/config-conventional": "^21.2.0",
     "@types/node": "^22.10.5",
     "autoprefixer": "^10.4.20",
     "esbuild": "^0.24.2",
     "eslint": "^9",
+    "husky": "^9.1.7",
     "only-allow": "^1.2.2",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",

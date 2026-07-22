@@ -55,12 +55,79 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Generate changelog
+        id: changelog
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: tags } = await github.rest.repos.listTags({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 2
+            });
+
+            if (tags.length < 2) {
+              return "No previous release found.";
+            }
+
+            const currentTag = tags[0].name;
+            const previousTag = tags[1].name;
+
+            const { data: commits } = await github.rest.repos.compareCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              base: previousTag,
+              head: currentTag
+            });
+
+            const categories = {
+              feat: { title: "🚀 New Features", items: [] },
+              fix: { title: "🐛 Bug Fixes", items: [] },
+              chore: { title: "🛠️ Chores", items: [] },
+              docs: { title: "📝 Documentation", items: [] },
+              refactor: { title: "🔄 Refactor", items: [] },
+              style: { title: "✨ Style", items: [] },
+              improvement: { title: "🔧 Improvements", items: [] },
+              other: { title: "📦 Other", items: [] }
+            };
+
+            commits.commits.forEach(commit => {
+              const message = commit.commit.message.split('\n')[0];
+              let category = 'other';
+              
+              if (message.startsWith('feat:')) category = 'feat';
+              else if (message.startsWith('fix:')) category = 'fix';
+              else if (message.startsWith('chore:')) category = 'chore';
+              else if (message.startsWith('docs:')) category = 'docs';
+              else if (message.startsWith('refactor:')) category = 'refactor';
+              else if (message.startsWith('style:')) category = 'style';
+              else if (message.startsWith('improvement:')) category = 'improvement';
+              else if (message.startsWith('enhancement:')) category = 'improvement';
+              
+              categories[category].items.push(`- ${message}`);
+            });
+
+            let changelog = `### ${previousTag} → ${currentTag}\n\n`;
+            
+            for (const [key, cat] of Object.entries(categories)) {
+              if (cat.items.length > 0) {
+                changelog += `#### ${cat.title}\n\n${cat.items.join('\n')}\n\n`;
+              }
+            }
+
+            return changelog;
+          result-encoding: string
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
           body: |
-            Docker image: `ghcr.io/${{ github.repository }}:${{ github.ref_name }}`
+            ${{ steps.changelog.outputs.result }}
+
+            ---
+
+            ## Docker Image
+
             ```
             docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
             ```
