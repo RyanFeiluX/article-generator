@@ -121,7 +121,9 @@
     "confirmDelete": "Are you sure you want to delete this configuration?",
     "noConfiguredProviders": "No configured models yet",
     "azureCustomModel": "Custom Deployment Name",
-    "customModel": "Custom Model Name"
+    "customModel": "Custom Model Name",
+    "edit": "Edit",
+    "editProvider": "Edit Provider"
   },
   "sensitive": {
     "title": "Sensitive Words Configuration",

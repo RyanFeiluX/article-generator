@@ -72,3 +72,4 @@ frontend/public/version.js
 __pycache__/
 plan/
 
+.trae/

@@ -121,7 +121,9 @@
     "confirmDelete": "确定要删除这个配置吗？",
     "noConfiguredProviders": "暂无已配置的模型",
     "azureCustomModel": "自定义部署名称",
-    "customModel": "自定义模型名称"
+    "customModel": "自定义模型名称",
+    "edit": "编辑",
+    "editProvider": "编辑提供商"
   },
   "sensitive": {
     "title": "敏感词配置",
