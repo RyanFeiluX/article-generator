@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SnippetInput } from './components/SnippetInput';
 import { ProgressPanel } from './components/ProgressPanel';
@@ -6,101 +6,148 @@ import { ArticleDisplay } from './components/ArticleDisplay';
 import { SensitiveWordsModal } from './components/SensitiveWordsModal';
 import { TermTranslationModal } from './components/TermTranslationModal';
 import { ConfigModal } from './components/ConfigModal';
-import type { LLMConfig, ValidatedKeys, LLMProvider } from './types';
+import type { LLMConfig, ConfiguredProvider, ValidatedKeys } from './types';
 import { DEFAULT_PROVIDER_CONFIGS } from './types';
 import { useArticleGenerator } from './hooks/useArticleGenerator';
+
+function migrateOldConfig(): { configuredProviders: ConfiguredProvider[]; activeProviderId: string } {
+  const oldConfig = localStorage.getItem('llm-config');
+  const oldValidatedKeys = localStorage.getItem('validated-keys');
+  
+  if (!oldConfig) {
+    return { configuredProviders: [], activeProviderId: '' };
+  }
+
+  try {
+    const parsed: LLMConfig = JSON.parse(oldConfig);
+    const validatedKeys: ValidatedKeys = oldValidatedKeys ? JSON.parse(oldValidatedKeys) : {};
+    
+    const providerId = `${parsed.provider}-${Date.now()}`;
+    const configuredProvider: ConfiguredProvider = {
+      id: providerId,
+      provider: parsed.provider,
+      config: parsed.config,
+      validated: !!validatedKeys[parsed.provider],
+      createdAt: Date.now()
+    };
+
+    localStorage.removeItem('llm-config');
+    localStorage.removeItem('validated-keys');
+    
+    return {
+      configuredProviders: [configuredProvider],
+      activeProviderId: providerId
+    };
+  } catch {
+    return { configuredProviders: [], activeProviderId: '' };
+  }
+}
 
 function App() {
   const { t, i18n } = useTranslation();
 
-  // Default to Volc provider
-  const defaultConfig: LLMConfig = {
-    provider: 'volc',
-    config: DEFAULT_PROVIDER_CONFIGS.volc
-  };
-
-  const [llmConfig, setLlmConfig] = useState<LLMConfig>(() => {
-    const saved = localStorage.getItem('llm-config');
+  const [configuredProviders, setConfiguredProviders] = useState<ConfiguredProvider[]>(() => {
+    const saved = localStorage.getItem('configured-providers');
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        if (parsed.apiKey && !parsed.provider) {
-          return {
-            provider: 'volc',
-            config: {
-              apiKey: parsed.apiKey,
-              baseUrl: parsed.baseUrl || 'https://ark.cn-beijing.volces.com/api/v3',
-              model: parsed.model || 'doubao-pro',
-              temperature: parsed.temperature || 0.7,
-              maxTokens: parsed.maxTokens || 4096,
-              topP: parsed.topP || 0.95
-            }
-          };
-        }
-        return parsed;
+        return JSON.parse(saved);
       } catch {
-        return defaultConfig;
+        const migrated = migrateOldConfig();
+        return migrated.configuredProviders;
       }
     }
-    return defaultConfig;
+    const migrated = migrateOldConfig();
+    return migrated.configuredProviders;
   });
 
-  useEffect(() => {
-    const fetchDefaultConfig = async () => {
-      try {
-        const response = await fetch('/api/config');
-        const data = await response.json();
-        if (data.default_llm_config && !localStorage.getItem('llm-config')) {
-          setLlmConfig(data.default_llm_config);
-        }
-      } catch (error) {
-        console.error('Failed to fetch default config:', error);
-      }
+  const [activeProviderId, setActiveProviderId] = useState<string>(() => {
+    const saved = localStorage.getItem('active-provider');
+    if (saved) {
+      return saved;
+    }
+    const migrated = migrateOldConfig();
+    return migrated.activeProviderId;
+  });
+
+  const llmConfig: LLMConfig = useMemo(() => {
+    const activeProvider = configuredProviders.find(p => p.id === activeProviderId);
+    if (activeProvider) {
+      return {
+        provider: activeProvider.provider,
+        config: activeProvider.config
+      };
+    }
+    return {
+      provider: 'volc',
+      config: DEFAULT_PROVIDER_CONFIGS.volc
     };
-    fetchDefaultConfig();
-  }, []);
+  }, [configuredProviders, activeProviderId]);
+
+  useEffect(() => {
+    localStorage.setItem('configured-providers', JSON.stringify(configuredProviders));
+  }, [configuredProviders]);
+
+  useEffect(() => {
+    localStorage.setItem('active-provider', activeProviderId);
+  }, [activeProviderId]);
 
   const [tavilyApiKey, setTavilyApiKey] = useState<string>(() => {
     return localStorage.getItem('tavily-api-key') || '';
   });
 
-  const [validatedKeys, setValidatedKeys] = useState<ValidatedKeys>(() => {
-    const saved = localStorage.getItem('validated-keys');
-    return saved ? JSON.parse(saved) : {};
-  });
+  useEffect(() => {
+    localStorage.setItem('tavily-api-key', tavilyApiKey);
+  }, [tavilyApiKey]);
 
   const [showSensitiveWords, setShowSensitiveWords] = useState(false);
   const [showTermTranslation, setShowTermTranslation] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
 
-  useEffect(() => {
-    localStorage.setItem('llm-config', JSON.stringify(llmConfig));
-  }, [llmConfig]);
-
-  useEffect(() => {
-    localStorage.setItem('tavily-api-key', tavilyApiKey);
-  }, [tavilyApiKey]);
-
-  useEffect(() => {
-    localStorage.setItem('validated-keys', JSON.stringify(validatedKeys));
-  }, [validatedKeys]);
-
   const handleConfigChange = (config: LLMConfig) => {
-    setLlmConfig(config);
+    setConfiguredProviders(prev => {
+      if (activeProviderId) {
+        return prev.map(p => 
+          p.id === activeProviderId 
+            ? { ...p, config: config.config, provider: config.provider }
+            : p
+        );
+      }
+      const newProvider: ConfiguredProvider = {
+        id: `provider-${Date.now()}`,
+        provider: config.provider,
+        config: config.config,
+        validated: false,
+        createdAt: Date.now()
+      };
+      setActiveProviderId(newProvider.id);
+      return [...prev, newProvider];
+    });
+  };
+
+  const handleAddProvider = (provider: ConfiguredProvider) => {
+    setConfiguredProviders(prev => [...prev, provider]);
+  };
+
+  const handleRemoveProvider = (id: string) => {
+    setConfiguredProviders(prev => prev.filter(p => p.id !== id));
+    if (activeProviderId === id) {
+      const remaining = configuredProviders.filter(p => p.id !== id);
+      setActiveProviderId(remaining.length > 0 ? remaining[0].id : '');
+    }
+  };
+
+  const handleSetActiveProvider = (id: string) => {
+    setActiveProviderId(id);
+  };
+
+  const handleUpdateProvider = (id: string, updates: Partial<ConfiguredProvider>) => {
+    setConfiguredProviders(prev => prev.map(p => 
+      p.id === id ? { ...p, ...updates } : p
+    ));
   };
 
   const handleTavilyApiKeyChange = (key: string) => {
     setTavilyApiKey(key);
-  };
-
-  const handleApiKeyChange = (provider: LLMProvider, newKey: string) => {
-    if (validatedKeys[provider] && validatedKeys[provider] !== newKey) {
-      setValidatedKeys(prev => {
-        const next = { ...prev };
-        delete next[provider];
-        return next;
-      });
-    }
   };
 
   const toggleLanguage = () => {
@@ -361,12 +408,15 @@ function App() {
         isOpen={showConfig}
         onClose={() => setShowConfig(false)}
         config={llmConfig}
+        configuredProviders={configuredProviders}
+        activeProviderId={activeProviderId}
         onConfigChange={handleConfigChange}
+        onAddProvider={handleAddProvider}
+        onRemoveProvider={handleRemoveProvider}
+        onSetActiveProvider={handleSetActiveProvider}
+        onUpdateProvider={handleUpdateProvider}
         tavilyApiKey={tavilyApiKey}
         onTavilyApiKeyChange={handleTavilyApiKeyChange}
-        validatedKeys={validatedKeys}
-        onValidatedKeysChange={setValidatedKeys}
-        onApiKeyChange={handleApiKeyChange}
       />
     </div>
   );

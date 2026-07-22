@@ -109,7 +109,19 @@
     "keyInvalid": "API 密钥无效",
     "keyNotSet": "未验证",
     "verifyFirst": "请先验证 API 密钥",
-    "networkError": "网络错误"
+    "networkError": "网络错误",
+    "availableModels": "可用模型",
+    "configuredModels": "已配置模型",
+    "selectProvider": "选择提供商",
+    "addNewProvider": "添加新配置",
+    "addProvider": "添加提供商",
+    "delete": "删除",
+    "setActive": "设为默认",
+    "current": "当前",
+    "confirmDelete": "确定要删除这个配置吗？",
+    "noConfiguredProviders": "暂无已配置的模型",
+    "azureCustomModel": "自定义部署名称",
+    "customModel": "自定义模型名称"
   },
   "sensitive": {
     "title": "敏感词配置",

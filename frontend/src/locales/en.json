@@ -109,7 +109,19 @@
     "keyInvalid": "API Key invalid",
     "keyNotSet": "Not verified",
     "verifyFirst": "Please verify your API key first",
-    "networkError": "Network error"
+    "networkError": "Network error",
+    "availableModels": "Available Models",
+    "configuredModels": "Configured Models",
+    "selectProvider": "Select Provider",
+    "addNewProvider": "Add New Configuration",
+    "addProvider": "Add Provider",
+    "delete": "Delete",
+    "setActive": "Set Active",
+    "current": "Current",
+    "confirmDelete": "Are you sure you want to delete this configuration?",
+    "noConfiguredProviders": "No configured models yet",
+    "azureCustomModel": "Custom Deployment Name",
+    "customModel": "Custom Model Name"
   },
   "sensitive": {
     "title": "Sensitive Words Configuration",

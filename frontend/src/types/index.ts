@@ -94,6 +94,73 @@ export function isKeyValidated(
   return !!validatedKeys[provider] && validatedKeys[provider] === apiKey;
 }
 
+export interface ConfiguredProvider {
+  id: string;
+  provider: LLMProvider;
+  config: VolcConfig | OpenAIConfig | AzureConfig | AnthropicConfig | DeepSeekConfig | KimiConfig;
+  name?: string;
+  validated: boolean;
+  createdAt: number;
+}
+
+export interface AvailableModel {
+  provider: LLMProvider;
+  providerName: string;
+  models: string[];
+  requiresEndpoint?: boolean;
+  requiresBaseUrl?: boolean;
+}
+
+export const AVAILABLE_MODELS: AvailableModel[] = [
+  {
+    provider: 'volc',
+    providerName: 'Volc Engine ARK (Doubao)',
+    models: ['doubao-pro', 'doubao-lite', 'doubao-3']
+  },
+  {
+    provider: 'openai',
+    providerName: 'OpenAI',
+    models: ['gpt-4', 'gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo']
+  },
+  {
+    provider: 'azure',
+    providerName: 'Azure OpenAI',
+    models: [],
+    requiresEndpoint: true
+  },
+  {
+    provider: 'anthropic',
+    providerName: 'Anthropic Claude',
+    models: ['claude-3-5-sonnet', 'claude-3-opus', 'claude-3-haiku']
+  },
+  {
+    provider: 'deepseek',
+    providerName: 'DeepSeek',
+    models: ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-chat', 'deepseek-r1']
+  },
+  {
+    provider: 'kimi',
+    providerName: 'Kimi (Moonshot)',
+    models: ['kimi-k2.6', 'kimi-k2.5', 'kimi-k2.7-code', 'kimi-k2.7-code-highspeed', 'moonshot-v1-128k', 'moonshot-v1-32k', 'moonshot-v1-8k']
+  },
+  {
+    provider: 'custom',
+    providerName: 'Custom API',
+    models: [],
+    requiresBaseUrl: true
+  }
+];
+
+export const PROVIDER_LABELS: Record<LLMProvider, string> = {
+  volc: 'Volc Engine ARK (Doubao)',
+  openai: 'OpenAI',
+  azure: 'Azure OpenAI',
+  anthropic: 'Anthropic Claude',
+  deepseek: 'DeepSeek',
+  kimi: 'Kimi (Moonshot)',
+  custom: 'Custom API'
+};
+
 // Default provider configs
 export const DEFAULT_PROVIDER_CONFIGS: Record<LLMProvider, any> = {
   volc: {
