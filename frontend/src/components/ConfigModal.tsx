@@ -29,6 +29,19 @@ export function ConfigModal({
   const [localTavilyKey, setLocalTavilyKey] = useState(tavilyApiKey);
   const [showProviderModal, setShowProviderModal] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ConfiguredProvider | null>(null);
+  const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (providerId: string) => {
+    setExpandedProviders(prev => {
+      const next = new Set(prev);
+      if (next.has(providerId)) {
+        next.delete(providerId);
+      } else {
+        next.add(providerId);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -103,20 +116,37 @@ export function ConfigModal({
               </h3>
               <div className="space-y-2 max-h-80 overflow-y-auto">
                 {AVAILABLE_MODELS.map(available => (
-                  <div key={available.provider} className="bg-white rounded-lg p-3 border border-gray-200">
-                    <div className="font-medium text-sm text-gray-800">{available.providerName}</div>
-                    {available.models.length > 0 && (
-                      <div className="mt-1.5 space-y-0.5">
-                        {available.models.map(model => (
-                          <div key={model} className="text-xs text-gray-500 pl-2 border-l-2 border-gray-300">
-                            {model}
+                  <div key={available.provider} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                    <button
+                      onClick={() => toggleExpand(available.provider)}
+                      className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                    >
+                      <span className="font-medium text-sm text-gray-800">{available.providerName}</span>
+                      <svg
+                        className={`w-4 h-4 text-gray-400 transition-transform ${expandedProviders.has(available.provider) ? 'rotate-90' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                    {expandedProviders.has(available.provider) && (
+                      <div className="px-3 pb-2">
+                        {available.models.length > 0 && (
+                          <div className="space-y-0.5">
+                            {available.models.map(model => (
+                              <div key={model} className="text-xs text-gray-500 pl-2 border-l-2 border-gray-300">
+                                {model}
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    )}
-                    {available.models.length === 0 && (
-                      <div className="mt-1.5 text-xs text-gray-400 pl-2">
-                        {available.requiresEndpoint ? t('config.azureCustomModel') : t('config.customModel')}
+                        )}
+                        {available.models.length === 0 && (
+                          <div className="text-xs text-gray-400 pl-2">
+                            {available.requiresEndpoint ? t('config.azureCustomModel') : t('config.customModel')}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

@@ -167,15 +167,21 @@ export function ProviderConfigModal({
         <div className="px-6 py-6 overflow-y-auto flex-1 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('config.provider')}</label>
-            <select
-              value={provider}
-              onChange={(e) => handleProviderChange(e.target.value as LLMProvider)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            >
-              {(Object.keys(PROVIDER_LABELS) as LLMProvider[]).map(p => (
-                <option key={p} value={p}>{PROVIDER_LABELS[p]}</option>
-              ))}
-            </select>
+            {editProvider ? (
+              <div className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700">
+                {PROVIDER_LABELS[provider]}
+              </div>
+            ) : (
+              <select
+                value={provider}
+                onChange={(e) => handleProviderChange(e.target.value as LLMProvider)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              >
+                {(Object.keys(PROVIDER_LABELS) as LLMProvider[]).map(p => (
+                  <option key={p} value={p}>{PROVIDER_LABELS[p]}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div>
