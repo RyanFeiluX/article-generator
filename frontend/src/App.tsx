@@ -184,7 +184,7 @@ function App() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="max-w-screen-2xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">{t('header.title')}</h1>
@@ -239,7 +239,7 @@ function App() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <main className="max-w-screen-2xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Input */}
           <div className="lg:col-span-1 space-y-6">
@@ -383,7 +383,7 @@ function App() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 mt-12">
-        <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="max-w-screen-2xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between text-sm text-gray-500">
             <p>{t('footer.description')}</p>
             <p className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">v{(window as any).APP_VERSION || '0.0.1'}</p>
