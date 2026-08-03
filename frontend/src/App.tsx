@@ -382,11 +382,14 @@ function App() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-12">
-        <div className="max-w-screen-2xl mx-auto px-4 py-6">
+      <footer className="bg-white border-t border-gray-200 mt-4">
+        <div className="max-w-screen-2xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between text-sm text-gray-500">
             <p>{t('footer.description')}</p>
-            <p className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">v{(window as any).APP_VERSION || '0.0.1'}</p>
+            <div className="flex items-center space-x-3">
+              <p className="text-xs">© {new Date().getFullYear()} Article Generator</p>
+              <p className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">v{(window as any).APP_VERSION || '0.0.1'}</p>
+            </div>
           </div>
         </div>
       </footer>
