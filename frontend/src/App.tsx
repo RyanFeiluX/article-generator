@@ -239,10 +239,10 @@ function App() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-screen-2xl mx-auto px-4 py-8 pb-14">
+      <main className="flex-1 w-full max-w-screen-2xl mx-auto px-4 py-8 pb-14 overflow-x-clip">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Input */}
-          <div className="lg:col-span-1 space-y-6">
+          <div className="lg:col-span-1 min-w-0 space-y-6">
             <SnippetInput
               snippets={snippets}
               onAdd={addSnippet}
@@ -371,7 +371,7 @@ function App() {
           </div>
 
           {/* Right Column - Output */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 min-w-0">
             <ArticleDisplay
               title={generatedTitle}
               content={generatedContent}

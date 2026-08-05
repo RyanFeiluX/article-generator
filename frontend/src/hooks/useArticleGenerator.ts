@@ -127,15 +127,15 @@ export function useArticleGenerator({ llmConfig, tavilyApiKey }: UseArticleGener
   }, []);
 
   const clearAll = useCallback(() => {
+    abortControllerRef.current?.abort();
+    setIsGenerating(false);
+    setProgress(null);
+    contentBufferRef.current = '';
     setSnippets([]);
     setGeneratedContent('');
     setGeneratedTitle('');
     setSources([]);
     setError(null);
-    setTopic('');
-    setStyle('informative');
-    setLength('standard');
-    setUseSearch(true);
     localStorage.removeItem(STORAGE_KEY);
   }, []);
 
